@@ -86,5 +86,6 @@ Las URLs son `/` (inglés), `/<locale>/` (tema) y `/<locale>/concepts/<id>/`, do
 
 - Sin servidor ni funciones serverless; nada de secretos en el cliente.
 - Sin scripts de analítica o tracking de terceros.
+  - Excepción aceptada de forma provisional: en el plan gratuito, Netlify inyecta en cada página su script `/.netlify/scripts/hud` (badge y barra de herramientas del propietario), que no se puede desactivar. No forma parte del código del sitio. Revisar si se cambia de plan o de proveedor.
 - Accesibilidad: los retos y simuladores deben poder usarse con teclado y tener texto alternativo para lo visual.
 - Rendimiento: las páginas de lectura deben funcionar sin JavaScript; solo los retos y simuladores lo necesitan.
