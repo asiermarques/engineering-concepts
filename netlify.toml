@@ -5,5 +5,4 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# Production deploys come from main; Netlify builds a deploy preview per
-# branch/PR with the same build command (enable branch deploys in the site settings).
+# Trunk-based: every push to main deploys to production. No branch deploys or PR previews.

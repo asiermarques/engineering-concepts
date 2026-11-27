@@ -20,7 +20,8 @@ repo (MDX/YAML)  ──build──▶  HTML estático + islas React  ──▶  
 | Contenido | Content collections de Astro (loader `glob`) con esquemas Zod | Añadir contenido = añadir ficheros; el build falla si un concepto o reto está mal formado. |
 | Estado de la persona | Almacenamiento del navegador | Sin cuentas ni backend (ver PRODUCT.md). |
 | i18n | Rutas por idioma (`/es/…`, `/en/…`) con el i18n de Astro | Español e inglés desde la primera versión. |
-| Hosting | Netlify, build desde `main` y previews por rama | Gratis para este uso, previews de contenido antes de publicar. |
+| Hosting | Netlify, despliegue de producción en cada push a `main` | Gratis para este uso; sin previews por rama (ver Flujo de trabajo). |
+| Flujo de trabajo | Trunk-based: commits pequeños directamente sobre `main` | Integración continua real, sin ramas de larga vida ni merges. |
 
 ## Organización del código
 
@@ -79,9 +80,18 @@ Las URLs son `/` (portada en inglés), `/<locale>/` (portada: una tarjeta por te
 - Validación del contenido en build mediante los esquemas de las colecciones.
 - Tests end-to-end de los flujos principales (leer un concepto, completar un reto, conservar el progreso al recargar).
 - Herramientas: **Vitest** (lógica pura y componentes React con Testing Library + jsdom, ficheros `*.test.ts(x)` junto al código) y **Playwright** (`tests/e2e`, contra `dist/` servido por `scripts/serve-dist.mjs`, porque `astro preview` se desacopla a segundo plano y no se puede supervisar desde Playwright).
-- Comandos: `npm test`, `npm run test:e2e`, `npm run build`.
+- Comandos: `npm test`, `npm run test:e2e`, `npm run build`, `npm run verify` (tests + build, antes de cada push).
 - La **Evaluación** es una isla `client:only="react"`: sin JavaScript solo se muestra un aviso (`<noscript>`).
 - El estado de la Evaluación está solo en memoria (sin almacenamiento) hasta el requisito de progreso.
+
+## Flujo de trabajo (trunk-based)
+
+- Se trabaja **directamente sobre `main`**: sin ramas de funcionalidad ni pull requests.
+- Commits **pequeños y frecuentes**; cada commit deja `main` desplegable.
+- Antes de hacer push: `npm run verify` (tests unitarios + build con validación de contenido).
+- CI (`.github/workflows/ci.yml`) ejecuta lo mismo en cada push a `main`; si falla, arreglarlo es lo primero.
+- Netlify publica en producción cada push a `main`. El trabajo a medio hacer no se oculta en una rama: se sube en pasos que no rompen nada o se deja sin enlazar desde la navegación hasta que esté listo.
+- Para comprobar un despliegue: `E2E_BASE_URL=<url> npm run test:e2e`.
 
 ## Restricciones
 
