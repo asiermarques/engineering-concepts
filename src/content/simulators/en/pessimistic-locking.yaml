@@ -1,0 +1,19 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: pessimistic-locking
+caption: "With SELECT FOR UPDATE the second transaction waits for the first one to commit, then reads the new status and stops."
+actors:
+  - "Transaction A"
+  - "Transaction B"
+  - "Row 42"
+steps:
+  - cells: ["BEGIN; SELECT ... FOR UPDATE → PENDING", "", "locked by A"]
+    state: "Row 42: PENDING, locked by A. B has not started."
+  - cells: ["", "BEGIN; SELECT ... FOR UPDATE → waits", "locked by A"]
+    state: "Row 42: PENDING, locked by A. B is waiting for A's lock."
+    note: "B's locking read waits instead of returning the stale PENDING. A plain SELECT without FOR UPDATE would not wait: under MVCC it reads a snapshot."
+  - cells: ["UPDATE status = PAID; COMMIT", "", "PAID, unlocked"]
+    state: "Row 42: PAID, lock released at A's COMMIT. B's SELECT can go on."
+    note: "The lock is held until the transaction ends: every slow step inside it makes B wait longer."
+  - cells: ["", "the SELECT returns: PAID → does not charge", "PAID"]
+    state: "Row 42: PAID, now locked by B until B ends. Charges: 1."
+    note: "After the wait, the locking read returns the latest committed row (PAID). In PostgreSQL under REPEATABLE READ it fails with a serialization error instead, which must be retried."

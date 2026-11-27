@@ -34,11 +34,14 @@ src/
     topics/<locale>/<topic>.md                  # topic introduction
     concepts/<locale>/<topic>/<concept>.mdx
     challenges/<locale>/<concept>.yaml          # { concept, challenges: [...] }
+    simulators/<locale>/<concept>.yaml          # { concept, caption, actors, steps: [{ cells, state, note? }] }
   features/
     concept-reading/       # layout, topic/concept pages, previous/next navigation, concept schema
     challenges/            # schema, grading, state and UI (React island) of the Assessment
     content-validation/    # cross-file rules (translations, minimum challenges) and validated loading
-    simulators/            # Static walkthrough (StaticWalkthrough.astro); React simulators in the future
+    simulators/            # schema.ts (Simulator sequence), Simulator.astro (MDX embed: loads the sequence for
+                           # the page's locale), Simulator.tsx (stepping/autoplay island), StaticWalkthrough.astro
+                           # (no-JS rendering)
     progress/              # progress.ts (pure model: status, results, versioned parse/migrate), store.ts
                            # (the only storage access), browser.ts (shared store), paint.ts (map/card DOM),
                            # ProgressPanel.tsx (reset/export/import island)
@@ -57,17 +60,18 @@ URLs are `/` (English home page), `/<locale>/` (home page: one card per topic), 
 ## Content model
 
 - **Topic** → ordered list of **concepts**.
-- **Concept**: MDX with frontmatter (stable id, title, topic, order, difficulty level, prerequisite concepts, summary). It can embed simulators as components.
+- **Concept**: MDX with frontmatter (stable id, title, topic, order, difficulty level, prerequisite concepts, summary). It embeds its **Simulator** with `<Simulator concept="<id>" />`.
 - **Challenge**: data (YAML or frontmatter) with a stable id, the concept it belongs to, the type and its type-specific data; it always includes an explanation of the answer.
 - Concept and challenge ids are **stable and identical in every locale**: progress is stored by id and must not break when editing text or switching locale.
 - A concept, challenge or topic without a translation **breaks the build** (requirement 001, BR-001).
 - A concept's challenges live in a single file `challenges/<locale>/<concept>.yaml`, with a schema discriminated by `type` (today only `multiple-choice`). Whether a question accepts several options is inferred from the number of correct options.
 - Each option has a stable id identical in every locale, so the build checks that the correct option matches across locales.
+- A **Simulator** sequence lives in `simulators/<locale>/<concept>.yaml`, named after its **Concept**: a caption, the actors (one lane each) and the **Steps**, each with one cell per actor (empty when that actor doesn't act), a required **Simulator state** and an optional **Step note**. Being content rather than inline MDX props is what lets the build compare translations.
 
 ### Build-time validation
 
-1. **Per file**: Zod schemas of the collections (required `learning objective`, at least one correct option, explanation per option…).
-2. **Cross-file**: `features/content-validation/validateContent.ts` (pure function) checks translations, a minimum of 3 challenges per concept, duplicate ids, references to non-existent concepts and option consistency across locales. `loadContent.ts` runs it from the pages and throws a single error listing **all** violations.
+1. **Per file**: Zod schemas of the collections (required `learning objective`, at least one correct option, explanation per option; for a Simulator, a non-empty sequence, one cell per actor in every step, at least one actor acting and a state in every step…).
+2. **Cross-file**: `features/content-validation/validateContent.ts` (pure function) checks translations, a minimum of 3 challenges per concept, duplicate ids, references to non-existent concepts and option consistency across locales. For Simulators: a translation in every locale, the same number of steps and actors in every locale, and a step note in one locale requires it in the other (requirement 003, BR-001/BR-002). `loadContent.ts` runs it from the pages and throws a single error listing **all** violations.
 
 ## Browser state
 
@@ -84,6 +88,7 @@ URLs are `/` (English home page), `/<locale>/` (home page: one card per topic), 
 - Tools: **Vitest** (pure logic and React components with Testing Library + jsdom, `*.test.ts(x)` files next to the code) and **Playwright** (`tests/e2e`, against `dist/` served by `scripts/serve-dist.mjs`, because `astro preview` detaches to the background and cannot be supervised by Playwright).
 - Commands: `npm test`, `npm run test:e2e`, `npm run build`, `npm run verify` (tests + build, before every push).
 - The **Assessment** is a `client:only="react"` island: without JavaScript only a notice is shown (`<noscript>`).
+- The **Simulator** is a `client:load` island that receives the **Static walkthrough** as server-rendered children and renders them until it hydrates, so the no-JS page keeps the complete table (every step, state and note). It holds its step in memory only (no storage, always starts on step 1), and its JavaScript is only included on pages that embed one. Autoplay uses one fixed pace (`AUTOPLAY_PACE_MS`); unit tests drive it with fake timers and e2e tests with Playwright's clock.
 - The **Assessment** island receives its `conceptId`, restores its state from saved **Progress** (`restoreState`, which applies the content-change rules: removed challenges ignored, answers with unknown options unanswered) and saves every change through the store (`useEffect` around the pure reducer). Last write wins between tabs.
 - The topic map (`[data-concept-id]`, `.stage__status`) and the home cards (`[data-topic-concepts]`, `.topic-card__mastered`) are static HTML painted by small client scripts using `paint.ts`; without JavaScript they keep their baseline. All scripts and islands of a page share one store (`getProgressStore()`) and repaint on change.
 - Storage failures (blocked, full, corrupt) degrade to in-memory state; `store.canSave()` drives the notice in the **Assessment**.

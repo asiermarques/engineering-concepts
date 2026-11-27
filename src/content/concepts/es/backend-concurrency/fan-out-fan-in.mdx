@@ -6,19 +6,11 @@ order: 10
 learningObjective: Coordinar llamadas REST independientes y gestionar fallos parciales.
 summary: Lanzar juntas las llamadas independientes, esperar a todas y decidir de antemano qué fallos son fatales.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 El **fan-out** lanza varias tareas independientes. El **fan-in** espera a que terminen y combina los resultados. Un servicio de Checkout que necesita información de Stock, Vouchers y Customers no necesita llamar a esos servicios uno tras otro: en secuencia, cada llamada empieza cuando termina la anterior. Las tres pueden progresar concurrentemente, suponiendo que los clientes HTTP soporten este modelo de ejecución o se ejecuten sobre recursos adecuados.
 
-<StaticWalkthrough
-  caption="Tres llamadas REST independientes: en secuencia la latencia es la suma de las tres; con fan-out/fan-in es aproximadamente la de la más lenta."
-  columns={['Llamada', 'Duración', 'En secuencia termina en', 'De forma concurrente termina en']}
-  rows={[
-    ['stock-service', '100 ms', '100 ms', '100 ms'],
-    ['vouchers-service', '200 ms', '300 ms', '200 ms'],
-    ['customers-service', '50 ms', '350 ms', '50 ms (total ≈ 200 ms, 43 % menos)'],
-  ]}
-/>
+<Simulator concept="fan-out-fan-in" />
 
 ```kotlin
 suspend fun getCheckout() = coroutineScope {

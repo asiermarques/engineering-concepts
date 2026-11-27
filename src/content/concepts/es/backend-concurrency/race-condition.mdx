@@ -6,7 +6,7 @@ order: 1
 learningObjective: Explicar por qué leer, comprobar y escribir no es seguro.
 summary: Dos peticiones se intercalan entre la comprobación y la escritura, y el resultado depende del momento.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 Una **race condition** ocurre cuando el resultado depende del orden en que se intercalan operaciones concurrentes. La forma clásica es **leer → comprobar → escribir** (check-then-act): cada paso es correcto por separado, pero nada impide que otra petición se ejecute entre ellos.
 
@@ -41,19 +41,7 @@ POST /orders/42/pay HTTP/1.1
 POST /orders/42/pay HTTP/1.1
 ```
 
-<StaticWalkthrough
-  caption="Dos peticiones pagan el mismo pedido: ambas leen PENDING antes de que ninguna escriba PAID, así que se cobra dos veces al cliente."
-  columns={['Petición A', 'Petición B', 'Estado del pedido en la base de datos']}
-  rows={[
-    ['lee el pedido 42 → PENDING', '', 'PENDING'],
-    ['', 'lee el pedido 42 → PENDING', 'PENDING'],
-    ['comprueba: PENDING, se puede cobrar', '', 'PENDING'],
-    ['', 'comprueba: PENDING, se puede cobrar', 'PENDING'],
-    ['cobra la tarjeta', '', 'PENDING'],
-    ['', 'cobra la tarjeta', 'PENDING'],
-    ['escribe PAID', 'escribe PAID', 'PAID (cobrado dos veces)'],
-  ]}
-/>
+<Simulator concept="race-condition" />
 
 ## Lost update
 

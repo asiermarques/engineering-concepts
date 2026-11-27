@@ -33,11 +33,13 @@ Rule: Pixelify Sans is not used for digits, single letters or uppercase text: th
 - **Assessment**: area with a diagonal hatch; segmented bar of answered questions (green/red), "Question n/N" label, A/B/C keys for single-answer questions and pixel checkboxes for multi-answer ones; final panel with the Result and decorative stars.
 - **Concept status** (`.stage[data-status]`, `.stage__status`): painted client-side on the map number and always with text: *mastered* uses the accent fill and a ★, *in progress* a dashed border; the last **Result** follows in `--font-mono`. Home cards show `n/N mastered` (`.topic-card__mastered`).
 - **Progress panel** (`.progress-panel`): hard-shadow panel under the topic cards with Export, Import and Reset; confirmations are in-page (`.progress-panel__confirm`, warn colors), never browser dialogs.
-- **Static walkthrough**: "replay"-style table with steps numbered in mono.
+- **Buttons** also come in `.button--quiet` (surface background, same border and hard shadow) for secondary actions next to a primary yellow one. Controls that don't apply use `aria-disabled="true"` (styled like `:disabled`) so they keep keyboard focus.
+- **Simulator** (`.simulator`): hard-shadow panel with the caption, a lanes table (one column per actor, dashed lane separators, steps revealed one at a time, the current step marked with ▶ on an accent-filled number), a state panel in `--color-screen` with `--font-mono` text, an optional step note with an accent left border, a `Step n/N` counter in mono and Restart / Previous / Play-Pause (quiet) and Next (primary) controls. The current step fades in (`step-in`), which is off under `prefers-reduced-motion`.
+- **Static walkthrough** (`.walkthrough`): the Simulator without JavaScript. "Replay"-style table with steps numbered in mono, a bold State column and a full-width note row under the steps that have one.
 
 ## Motion
 
-Staggered entrances on the home page and the map, a `stamp` on the verdict and the Result, a shake on the incorrect option. All disabled under `prefers-reduced-motion`.
+Staggered entrances on the home page and the map, a `stamp` on the verdict and the Result, a shake on the incorrect option, a `step-in` fade on the Simulator's current step. All disabled under `prefers-reduced-motion` (Simulator autoplay stays available, because the Learner starts it).
 
 ## Pending for gamification
 

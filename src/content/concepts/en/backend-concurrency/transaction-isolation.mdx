@@ -6,7 +6,7 @@ order: 8
 learningObjective: Understand concurrency anomalies, MVCC and deadlocks.
 summary: Isolation levels trade anomalies for concurrency, MVCC gives snapshots without read locks, and deadlocks are detected and resolved by aborting one transaction.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 **Isolation** decides what a transaction can see of other concurrent transactions. Stronger isolation prevents more anomalies and costs more in blocking or retries.
 
@@ -75,17 +75,7 @@ Two on-call doctors each check that at least two are on call, and each goes off 
 
 A **deadlock** is a cycle of transactions waiting for each other's locks:
 
-<StaticWalkthrough
-  caption="Two transactions lock the same two rows in opposite order and wait for each other forever; the database detects the cycle and aborts one of them."
-  columns={['Transaction A', 'Transaction B', 'Result']}
-  rows={[
-    ['locks row 1', '', 'A holds 1'],
-    ['', 'locks row 2', 'B holds 2'],
-    ['requests row 2 → waits for B', '', 'A waits'],
-    ['', 'requests row 1 → waits for A', 'cycle detected'],
-    ['', 'aborted as the victim (deadlock error)', 'A continues, B must retry'],
-  ]}
-/>
+<Simulator concept="transaction-isolation" />
 
 ```java
 for (int attempt = 1; ; attempt++) {

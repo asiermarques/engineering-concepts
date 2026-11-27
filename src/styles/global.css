@@ -263,10 +263,12 @@ code {
 }
 .button:hover { filter: brightness(1.06); transform: translate(-1px, -1px); box-shadow: calc(var(--px) + 1px) calc(var(--px) + 1px) 0 var(--color-shadow); }
 .button:active { transform: translate(var(--px), var(--px)); box-shadow: 0 0 0 var(--color-shadow); }
-.button:disabled {
+.button:disabled,
+.button[aria-disabled='true'] {
   cursor: not-allowed; filter: grayscale(1); opacity: 0.5;
   transform: none; box-shadow: none;
 }
+.button--quiet { background: var(--color-surface); color: var(--color-text); }
 .button__glyph { font-size: 0.85em; }
 .button--start { font-size: 1.15rem; padding: 0.8rem 1.3rem; }
 .button--start .button__glyph { animation: blink 1.1s steps(2, jump-none) infinite; }
@@ -563,18 +565,20 @@ code {
   background: var(--color-text); color: var(--color-bg);
   border-bottom: 0;
 }
-.prose tbody tr:nth-child(even), .walkthrough tbody tr:nth-child(even) { background: var(--color-surface-2); }
+.prose tbody tr:nth-child(even) { background: var(--color-surface-2); }
 .prose--intro table { margin: var(--space-4) 0; }
 @media (min-width: 64rem) { .main--wide .prose { font-size: 1.08rem; } }
 
 /* Static walkthrough: a replay log, one row per tick */
 .walkthrough { margin: var(--space-5) 0; }
-.walkthrough figcaption {
+.walkthrough figcaption,
+.simulator figcaption {
   position: relative;
   font-weight: 600; line-height: 1.5;
   margin-bottom: var(--space-3); padding-left: calc(var(--space-4) + 0.25rem);
 }
-.walkthrough figcaption::before {
+.walkthrough figcaption::before,
+.simulator figcaption::before {
   content: '▶▶'; position: absolute; left: 0; top: 0.1rem;
   font-size: 0.75rem; letter-spacing: -0.15em; color: var(--color-accent-ink);
 }
@@ -585,6 +589,61 @@ code {
 .walkthrough tbody td { font-family: var(--font-mono); font-size: 0.86rem; }
 .walkthrough tbody tr { transition: background 0.1s; }
 .walkthrough tbody tr:hover { background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); }
+.walkthrough__state { font-weight: 700; }
+.walkthrough tbody tr.walkthrough__note > td {
+  border-left: 0; background: var(--color-surface-2);
+  font-family: var(--font-body); font-size: 0.9rem;
+}
+.walkthrough tbody tr.walkthrough__step:has(+ .walkthrough__note) > * { border-bottom-style: dashed; }
+
+/* Simulator: the Static walkthrough stepped through, one lane (column) per actor */
+.simulator {
+  margin: var(--space-5) 0; padding: var(--space-3);
+  display: grid; gap: var(--space-3);
+  background: var(--color-surface);
+  border: 2px solid var(--color-border-strong); box-shadow: var(--shadow-hard);
+}
+.simulator figcaption { margin-bottom: 0; }
+.simulator__lanes table {
+  width: 100%; table-layout: fixed;
+  border-collapse: separate; border-spacing: 0;
+  font-size: 0.86rem; line-height: 1.45;
+  border: 2px solid var(--color-border-strong);
+}
+.simulator__lanes th, .simulator__lanes td {
+  padding: var(--space-2); text-align: left; vertical-align: top; overflow-wrap: anywhere;
+}
+.simulator__lanes thead th {
+  font-weight: 600; font-size: 0.85rem; letter-spacing: 0.03em;
+  background: var(--color-text); color: var(--color-bg);
+}
+.simulator__lanes thead th:first-child { width: 2.75rem; }
+.simulator__lanes td { font-family: var(--font-mono); border-left: 1px dashed var(--color-border); }
+.simulator__lanes tbody tr + tr > * { border-top: 1px solid var(--color-border); }
+.simulator__lanes tbody th {
+  font-family: var(--font-mono); font-weight: 700; text-align: center; white-space: nowrap;
+  color: var(--color-accent-ink);
+}
+.simulator__step--current { background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface)); animation: step-in 0.3s ease-out; }
+.simulator__lanes .simulator__step--current > th { background: var(--color-accent); color: var(--color-on-accent); }
+.simulator__marker { font-size: 0.7em; margin-right: 2px; }
+.simulator__readout { display: grid; gap: var(--space-2); }
+.simulator__state, .simulator__note { margin: 0; padding: var(--space-2) var(--space-3); line-height: 1.5; }
+.simulator__state {
+  font-family: var(--font-mono); font-size: 0.95rem;
+  background: var(--color-screen); color: var(--color-on-screen);
+  border: 2px solid var(--color-border-strong);
+}
+.simulator__note { background: var(--color-surface-2); border-left: var(--px) solid var(--color-accent); font-size: 0.98rem; }
+.simulator__label {
+  display: block;
+  font-family: var(--font-body); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+  opacity: 0.8;
+}
+.simulator__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); }
+.simulator__position { margin: 0; font-family: var(--font-mono); font-weight: 700; }
+.simulator__buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.simulator .button { font-size: 0.95rem; padding: 0.45rem 0.8rem; }
 
 /* ---------- Assessment: the challenge zone ---------- */
 
@@ -816,6 +875,7 @@ code {
 @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.025); } 100% { transform: scale(1); } }
 @keyframes stamp { 0% { opacity: 0; transform: scale(1.6) rotate(-6deg); } 100% { opacity: 1; transform: none; } }
+@keyframes step-in { from { opacity: 0.2; } to { opacity: 1; } }
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-5px); }
@@ -825,6 +885,7 @@ code {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .simulator__step--current { animation: none; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -837,6 +898,7 @@ code {
 @media (forced-colors: active) {
   .button, .option, .question, .objective, .stage__body, .concept-nav__link, .topic-card { border: 2px solid CanvasText; }
   .meter__cell--ok, .meter__cell--bad, .pip--current { background: Highlight; }
+  .simulator__lanes .simulator__step--current > th { background: Highlight; color: HighlightText; }
 }
 
 /* ---------- Small screens: give the text the width ---------- */
@@ -847,6 +909,10 @@ code {
 
 @media (max-width: 40rem) {
   .assessment-section { padding-inline: var(--space-2); box-shadow: var(--shadow-hard); }
+  .simulator { padding: var(--space-2); }
+  .simulator__lanes table { font-size: 0.8rem; }
+  .simulator__lanes th, .simulator__lanes td { padding: var(--space-1); }
+  .simulator__lanes thead th:first-child { width: 2.25rem; }
   .question { padding-inline: var(--space-2); }
   .option__control { gap: var(--space-2); padding-inline: var(--space-2); }
   .option__key { width: 1.75rem; height: 1.75rem; }

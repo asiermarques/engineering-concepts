@@ -6,7 +6,7 @@ order: 7
 learningObjective: Entender leases, tokens de propietario y fencing tokens.
 summary: Un lock compartido entre pods es un lease con propietario, y solo es seguro si el recurso protegido comprueba un fencing token.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 Cuando el estado compartido no es una sola fila de base de datos, los pods necesitan un **lock distribuido** guardado en un coordinador compartido como Redis, ZooKeeper o una tabla de base de datos. No puede ser un lock que se quede retenido para siempre, así que es un **lease**: caduca tras un TTL.
 
@@ -46,17 +46,7 @@ Un `DEL` simple podría borrar un lock que ya caducó y que otro pod adquirió e
 
 Un lease puede caducar mientras su titular sigue ejecutándose, por una pausa larga de GC, una llamada de red lenta o un hilo detenido:
 
-<StaticWalkthrough
-  caption="El pod A se pausa más que su lease; el pod B adquiere el lock; cuando A despierta cree que aún tiene el lock y escribe con un token antiguo, que el recurso rechaza gracias al fencing token."
-  columns={['Pod A', 'Pod B', 'Lock / recurso']}
-  rows={[
-    ['adquiere el lock, token 33', '', 'propietario A, token 33'],
-    ['se pausa (GC, bloqueo de red)', '', 'el lease caduca'],
-    ['', 'adquiere el lock, token 34', 'propietario B, token 34'],
-    ['', 'escribe con el token 34', 'aceptado, token más alto visto = 34'],
-    ['se reanuda, escribe con el token 33', '', 'rechazado: 33 < 34'],
-  ]}
-/>
+<Simulator concept="distributed-locking" />
 
 Un **fencing token** es un número que crece en cada adquisición. El **recurso protegido** (la base de datos) recuerda el token más alto que ha visto y rechaza los anteriores:
 

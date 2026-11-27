@@ -6,7 +6,7 @@ order: 11
 learningObjective: Implementar un semáforo y entender los connection pools.
 summary: Limitar cuántas tareas usan un recurso escaso a la vez, para que el trabajo sobrante espere en vez de sobrecargarlo.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 Lanzarlo todo a la vez no siempre es buena idea: una base de datos, un proveedor de pagos o la CPU solo pueden atender una cantidad concurrente limitada. Un **límite de concurrencia** deja que como máximo *N* tareas usen el recurso y encola el resto.
 
@@ -41,15 +41,7 @@ if (!semaphore.tryAcquire()) {
 }
 ```
 
-<StaticWalkthrough
-  caption="Un semáforo con 3 permisos y 7 peticiones simultáneas: 3 se ejecutan y las otras 4 esperan o se rechazan, según la política."
-  columns={['Peticiones', 'Permisos disponibles', 'Resultado']}
-  rows={[
-    ['llegan 7 a la vez', '3', '3 se ejecutan, sobran 4'],
-    ['4 sobrantes', '0', 'esperan un permiso, o se rechazan con tryAcquire'],
-    ['una llamada en curso termina y libera', '1', 'entra una petición en espera'],
-  ]}
-/>
+<Simulator concept="concurrency-limiting" />
 
 La diferencia con un mutex: un mutex permite **una** ejecución protegida a la vez, un semáforo permite **N**. Un semáforo local tampoco es un límite global entre varios pods: 5 pods con 20 permisos cada uno pueden enviar 100 llamadas simultáneas.
 

@@ -1,0 +1,26 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: race-condition
+caption: "Dos peticiones pagan el mismo pedido: ambas leen PENDING antes de que ninguna escriba PAID, así que se cobra dos veces al cliente."
+actors:
+  - "Petición A"
+  - "Petición B"
+  - "Estado del pedido en la base de datos"
+steps:
+  - cells: ["lee el pedido 42 → PENDING", "", "PENDING"]
+    state: "El pedido 42 está PENDING. A cree que no está pagado. Cobros: 0."
+  - cells: ["", "lee el pedido 42 → PENDING", "PENDING"]
+    state: "El pedido 42 está PENDING. A y B creen que no está pagado. Cobros: 0."
+    note: "Las dos lecturas ocurren antes de que ninguna petición escriba: desde aquí, ambas decisiones se basan en el mismo valor obsoleto."
+  - cells: ["comprueba: PENDING, se puede cobrar", "", "PENDING"]
+    state: "El pedido 42 está PENDING. A ha decidido cobrar. Cobros: 0."
+  - cells: ["", "comprueba: PENDING, se puede cobrar", "PENDING"]
+    state: "El pedido 42 está PENDING. A y B han decidido cobrar. Cobros: 0."
+    note: "Cada comprobación es correcta para los datos que leyó; el problema es que los datos pueden cambiar entre la comprobación y la escritura."
+  - cells: ["cobra la tarjeta", "", "PENDING"]
+    state: "El pedido 42 sigue PENDING en la base de datos. Cobros: 1."
+  - cells: ["", "cobra la tarjeta", "PENDING"]
+    state: "El pedido 42 sigue PENDING en la base de datos. Cobros: 2."
+    note: "El cobro ocurre fuera de la base de datos, así que ninguna escritura posterior puede deshacerlo."
+  - cells: ["escribe PAID", "escribe PAID", "PAID (cobrado dos veces)"]
+    state: "El pedido 42 está PAID. Cobros: 2 para un solo pedido."
+    note: "Las dos escrituras tienen éxito y gana la última; nada en este flujo detecta el duplicado."

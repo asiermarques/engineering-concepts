@@ -6,7 +6,7 @@ order: 4
 learningObjective: Implement concurrency control with versioning and conditional updates.
 summary: Assume conflicts are rare, detect them at write time with a version, and retry or report them.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 **Optimistic locking** takes no lock while reading. Each row carries a **version**, and the write succeeds only if the version is still the one you read. If someone else wrote first, your update matches no row and you know there was a conflict.
 
@@ -20,18 +20,7 @@ WHERE  id = 7
 -- affected rows = 1 → you won; 0 → someone else changed the row
 ```
 
-<StaticWalkthrough
-  caption="Two clients edit the same account with versioning: the second write finds version 4 instead of 3, affects 0 rows and must reload and retry."
-  columns={['Client A', 'Client B', 'Row in the database']}
-  rows={[
-    ['read: balance 100, version 3', '', 'balance 100, version 3'],
-    ['', 'read: balance 100, version 3', 'balance 100, version 3'],
-    ['UPDATE ... WHERE version = 3 → 1 row', '', 'balance 70, version 4'],
-    ['', 'UPDATE ... WHERE version = 3 → 0 rows (conflict)', 'balance 70, version 4'],
-    ['', 'reload: balance 70, version 4', 'balance 70, version 4'],
-    ['', 'UPDATE ... WHERE version = 4 → 1 row', 'balance 40, version 5'],
-  ]}
-/>
+<Simulator concept="optimistic-locking" />
 
 ## In code
 

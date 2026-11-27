@@ -1,15 +1,17 @@
 ---
 /**
- * Static walkthrough: a step-by-step table of what a simulator will show.
- * It can later be replaced by the interactive simulator at the same place in the MDX.
+ * Static walkthrough: the Simulator's version without JavaScript. Every step with what each
+ * actor does, the state after it and its note, so no information is lost (requirement 003, FR-006).
  */
+import type { SimulatorLabels } from '../../i18n/ui';
+import type { SimulatorSequence } from './schema';
+
 interface Props {
-  /** Describes the sequence in one sentence; doubles as the text alternative. */
-  caption: string;
-  columns: string[];
-  rows: string[][];
+  sequence: Omit<SimulatorSequence, 'concept'>;
+  labels: SimulatorLabels;
 }
-const { caption, columns, rows } = Astro.props;
+const { sequence, labels } = Astro.props;
+const { caption, actors, steps } = sequence;
 ---
 
 <figure class="walkthrough">
@@ -19,16 +21,27 @@ const { caption, columns, rows } = Astro.props;
       <thead>
         <tr>
           <th scope="col">#</th>
-          {columns.map((column) => <th scope="col">{column}</th>)}
+          {actors.map((actor) => <th scope="col">{actor}</th>)}
+          <th scope="col">{labels.state}</th>
         </tr>
       </thead>
       <tbody>
         {
-          rows.map((row, index) => (
-            <tr>
-              <th scope="row">{index + 1}</th>
-              {row.map((cell) => <td>{cell}</td>)}
-            </tr>
+          steps.map((step, index) => (
+            <Fragment>
+              <tr class="walkthrough__step">
+                <th scope="row">{index + 1}</th>
+                {step.cells.map((cell) => <td>{cell}</td>)}
+                <td class="walkthrough__state">{step.state}</td>
+              </tr>
+              {step.note && (
+                <tr class="walkthrough__note">
+                  <td colspan={actors.length + 2}>
+                    <strong>{labels.note}:</strong> {step.note}
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))
         }
       </tbody>

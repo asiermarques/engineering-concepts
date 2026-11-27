@@ -6,7 +6,7 @@ order: 11
 learningObjective: Implement a semaphore and understand connection pools.
 summary: Cap how many tasks use a scarce resource at once, so excess work waits instead of overloading it.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 Starting everything at once is not always good: a database, a payment provider or the CPU can only serve so much concurrently. A **concurrency limit** lets at most *N* tasks use the resource and queues the rest.
 
@@ -41,15 +41,7 @@ if (!semaphore.tryAcquire()) {
 }
 ```
 
-<StaticWalkthrough
-  caption="A semaphore with 3 permits and 7 simultaneous requests: 3 run and the other 4 wait or are rejected, depending on the policy."
-  columns={['Requests', 'Permits available', 'Outcome']}
-  rows={[
-    ['7 arrive at once', '3', '3 run, 4 are left over'],
-    ['4 left over', '0', 'wait for a permit, or are rejected with tryAcquire'],
-    ['a running call finishes and releases', '1', 'one waiting request enters'],
-  ]}
-/>
+<Simulator concept="concurrency-limiting" />
 
 The difference from a mutex: a mutex allows **one** protected execution at a time, a semaphore allows **N**. A local semaphore is also not a global limit across several pods: 5 pods with 20 permits each can send 100 simultaneous calls.
 

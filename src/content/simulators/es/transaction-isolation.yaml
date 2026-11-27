@@ -1,0 +1,20 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: transaction-isolation
+caption: "Dos transacciones bloquean las mismas dos filas en orden opuesto y se esperan mutuamente para siempre; la base de datos detecta el ciclo y aborta una de ellas."
+actors:
+  - "Transacción A"
+  - "Transacción B"
+  - "Base de datos"
+steps:
+  - cells: ["bloquea la fila 1", "", "A tiene la 1"]
+    state: "Fila 1: en manos de A. Fila 2: libre. Esperando: nadie."
+  - cells: ["", "bloquea la fila 2", "B tiene la 2"]
+    state: "Fila 1: en manos de A. Fila 2: en manos de B. Esperando: nadie."
+  - cells: ["pide la fila 2 → espera a B", "", "A espera"]
+    state: "Fila 1: en manos de A. Fila 2: en manos de B. Esperando: A, por la fila 2."
+  - cells: ["", "pide la fila 1 → espera a A", "ciclo detectado"]
+    state: "Fila 1: en manos de A. Fila 2: en manos de B. Esperando: A a B y B a A, un ciclo."
+    note: "Ninguna puede avanzar ni liberará por sí misma: sin detección ambas esperarían para siempre, o hasta un timeout de lock."
+  - cells: ["", "abortada como víctima (error de deadlock)", "A continúa, B debe reintentar"]
+    state: "Fila 1: en manos de A. Fila 2: en manos de A, concedida al liberarse los locks de B. B se deshizo (rollback)."
+    note: "La base de datos elige la víctima y deshace toda su transacción; la aplicación debe reintentarla. Bloquear las filas siempre en el mismo orden evita el ciclo."

@@ -1,0 +1,26 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: race-condition
+caption: "Two requests pay the same order: both read PENDING before either writes PAID, so the customer is charged twice."
+actors:
+  - "Request A"
+  - "Request B"
+  - "Order status in the database"
+steps:
+  - cells: ["read order 42 → PENDING", "", "PENDING"]
+    state: "Order 42 is PENDING. A believes it is unpaid. Charges: 0."
+  - cells: ["", "read order 42 → PENDING", "PENDING"]
+    state: "Order 42 is PENDING. A and B both believe it is unpaid. Charges: 0."
+    note: "Both reads happen before either request writes: from here on, both decisions rest on the same stale value."
+  - cells: ["check: PENDING, OK to charge", "", "PENDING"]
+    state: "Order 42 is PENDING. A has decided to charge. Charges: 0."
+  - cells: ["", "check: PENDING, OK to charge", "PENDING"]
+    state: "Order 42 is PENDING. A and B have both decided to charge. Charges: 0."
+    note: "Each check is correct for the data it read; the problem is that the data can change between the check and the write."
+  - cells: ["charge the card", "", "PENDING"]
+    state: "Order 42 is still PENDING in the database. Charges: 1."
+  - cells: ["", "charge the card", "PENDING"]
+    state: "Order 42 is still PENDING in the database. Charges: 2."
+    note: "The charge happens outside the database, so no later write can undo it."
+  - cells: ["write PAID", "write PAID", "PAID (charged twice)"]
+    state: "Order 42 is PAID. Charges: 2 for one order."
+    note: "Both writes succeed and the last one wins; nothing in this flow detects the duplicate."

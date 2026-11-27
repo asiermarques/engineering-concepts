@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MultipleChoiceChallenge } from '../challenges/schema';
 import { validateContent, type ContentSnapshot } from './validateContent';
+import type { SimulatorSequence } from '../simulators/schema';
 
 const q = (id: string, correctId = 'a'): MultipleChoiceChallenge => ({
   id,
@@ -10,6 +11,15 @@ const q = (id: string, correctId = 'a'): MultipleChoiceChallenge => ({
 });
 
 const threeQuestions = () => [q('q1'), q('q2'), q('q3')];
+
+const sequence = (): Pick<SimulatorSequence, 'actors' | 'steps'> => ({
+  actors: ['A', 'B'],
+  steps: [
+    { cells: ['read', ''], state: 's1' },
+    { cells: ['', 'read'], state: 's2', note: 'n2' },
+    { cells: ['write', ''], state: 's3' },
+  ],
+});
 
 function snapshot(): ContentSnapshot {
   const concepts = (locale: string) => [
@@ -28,8 +38,14 @@ function snapshot(): ContentSnapshot {
     ],
     concepts: [...concepts('en'), ...concepts('es')],
     assessments: [...assessments('en'), ...assessments('es')],
+    simulators: [
+      { locale: 'en', concept: 'race-condition', ...sequence() },
+      { locale: 'es', concept: 'race-condition', ...sequence() },
+    ],
   };
 }
+
+const simulatorIn = (s: ContentSnapshot, locale: string) => s.simulators.find((x) => x.locale === locale)!;
 
 describe('validateContent', () => {
   it('passes for complete, consistent content', () => {
@@ -118,5 +134,48 @@ describe('validateContent', () => {
     s.topics = s.topics.filter((t) => t.locale === 'en');
     s.concepts = s.concepts.filter((c) => !(c.locale === 'es' && c.id === 'atomicity'));
     expect(validateContent(s).length).toBeGreaterThanOrEqual(2);
+  });
+
+  describe('simulators', () => {
+    it('fails when the step count differs between locales, naming the concept and both counts', () => {
+      const s = snapshot();
+      simulatorIn(s, 'es').steps.pop();
+      expect(validateContent(s)).toContain('Simulator "race-condition" has 2 steps in "es" but 3 in "en"');
+    });
+
+    it('fails when the number of actors differs between locales', () => {
+      const s = snapshot();
+      const es = simulatorIn(s, 'es');
+      es.actors = ['A', 'B', 'C'];
+      es.steps = es.steps.map((step) => ({ ...step, cells: [...step.cells, ''] }));
+      expect(validateContent(s)).toContain('Simulator "race-condition" has 3 actors in "es" but 2 in "en"');
+    });
+
+    it('fails when a step note exists in one locale only, naming the step and the missing locale', () => {
+      const s = snapshot();
+      simulatorIn(s, 'en').steps[2]!.note = 'only in en';
+      delete simulatorIn(s, 'es').steps[1]!.note;
+      const errors = validateContent(s);
+      expect(errors).toContain('Simulator "race-condition": step 3 has a note in "en" but not in "es"');
+      expect(errors).toContain('Simulator "race-condition": step 2 has a note in "en" but not in "es"');
+    });
+
+    it('fails when a simulator lacks a translation', () => {
+      const s = snapshot();
+      s.simulators = s.simulators.filter((x) => x.locale === 'en');
+      expect(validateContent(s)).toContain('Simulator "race-condition" is missing the "es" translation');
+    });
+
+    it('fails when a simulator points to a missing concept', () => {
+      const s = snapshot();
+      s.simulators.push({ locale: 'en', concept: 'ghost', ...sequence() }, { locale: 'es', concept: 'ghost', ...sequence() });
+      expect(validateContent(s)).toContain('Simulator in "en" points to unknown concept "ghost"');
+    });
+
+    it('fails on two simulators for the same concept in one locale', () => {
+      const s = snapshot();
+      s.simulators.push({ locale: 'en', concept: 'race-condition', ...sequence() });
+      expect(validateContent(s)).toContain('Duplicated simulator "race-condition" in "en"');
+    });
   });
 });

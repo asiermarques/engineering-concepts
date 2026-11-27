@@ -1,0 +1,17 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: coroutines-threads
+caption: "Three independent calls of 200 ms each: sequentially they take about 600 ms, concurrently about 200 ms, even on a single thread if the I/O is non-blocking, because the time is spent waiting."
+actors:
+  - "Sequential"
+  - "Concurrent (I/O-bound)"
+steps:
+  - cells: ["t = 0: call 1 starts", "t = 0: calls 1, 2 and 3 start"]
+    state: "Elapsed: 0 ms. Sequential: 0 of 3 done. Concurrent: 0 of 3 done."
+    note: "Concurrently, a single thread can start all three if the I/O is non-blocking: while the calls wait, the thread is free."
+  - cells: ["t = 200: call 1 ends, call 2 starts", "t = 200: calls 1, 2 and 3 end"]
+    state: "Elapsed: 200 ms. Sequential: 1 of 3 done. Concurrent: 3 of 3 done, total ~200 ms."
+  - cells: ["t = 400: call 2 ends, call 3 starts", ""]
+    state: "Elapsed: 400 ms. Sequential: 2 of 3 done. Concurrent: finished at ~200 ms."
+  - cells: ["t = 600: call 3 ends", ""]
+    state: "Elapsed: 600 ms. Sequential: 3 of 3 done, total ~600 ms. Concurrent: total ~200 ms."
+    note: "The time was spent waiting, not computing, so overlapping the waits saves about 400 ms."

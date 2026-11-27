@@ -6,7 +6,7 @@ order: 8
 learningObjective: Entender las anomalías de concurrencia, MVCC y deadlocks.
 summary: Los niveles de aislamiento cambian anomalías por concurrencia, MVCC da snapshots sin locks de lectura y los deadlocks se detectan y se resuelven abortando una transacción.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 El **aislamiento** decide qué puede ver una transacción de las demás transacciones concurrentes. Un aislamiento más fuerte previene más anomalías y cuesta más en bloqueos o reintentos.
 
@@ -75,17 +75,7 @@ Dos médicos de guardia comprueban que haya al menos dos de guardia, y cada uno 
 
 Un **deadlock** es un ciclo de transacciones que esperan los locks de las demás:
 
-<StaticWalkthrough
-  caption="Dos transacciones bloquean las mismas dos filas en orden opuesto y se esperan mutuamente para siempre; la base de datos detecta el ciclo y aborta una de ellas."
-  columns={['Transacción A', 'Transacción B', 'Resultado']}
-  rows={[
-    ['bloquea la fila 1', '', 'A tiene la 1'],
-    ['', 'bloquea la fila 2', 'B tiene la 2'],
-    ['pide la fila 2 → espera a B', '', 'A espera'],
-    ['', 'pide la fila 1 → espera a A', 'ciclo detectado'],
-    ['', 'abortada como víctima (error de deadlock)', 'A continúa, B debe reintentar'],
-  ]}
-/>
+<Simulator concept="transaction-isolation" />
 
 ```java
 for (int attempt = 1; ; attempt++) {

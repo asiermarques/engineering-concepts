@@ -6,23 +6,13 @@ order: 13
 learningObjective: Coordinar operaciones distribuidas mediante transacciones locales y compensaciones.
 summary: Una saga sustituye una transacción distribuida por una secuencia de transacciones locales, cada una con su acción compensatoria.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 Una transacción de base de datos no cubre automáticamente varias llamadas REST a microservicios distintos. Una compra que reserva stock, autoriza un pago y crea un pedido en tres servicios es el caso típico. Un checkout toca varios servicios: inventario, pagos, envíos. Cada uno es dueño de su base de datos, así que no hay una única transacción ACID entre ellos, y un two-phase commit distribuido es lento, acopla la disponibilidad y a menudo no está disponible entre servicios y terceros.
 
 Una **saga** es una secuencia de **transacciones locales**. Cada paso se confirma en su propio servicio. Si un paso posterior falla, la saga ejecuta **acciones compensatorias** de los pasos ya hechos.
 
-<StaticWalkthrough
-  caption="Saga de checkout: se reserva el stock, se cobra el pago y falla el envío, así que la saga compensa en orden inverso reembolsando el pago y liberando el stock."
-  columns={['Paso', 'Transacción local', 'Compensación si falla un paso posterior']}
-  rows={[
-    ['1', 'Reservar stock (inventario)', 'Liberar la reserva'],
-    ['2', 'Cobrar la tarjeta (pagos)', 'Reembolsar el pago'],
-    ['3', 'Crear el envío (envíos) → falla', 'Nada que deshacer; empezar a compensar los pasos 2 y 1'],
-    ['4', 'Compensar: reembolsar el pago', ''],
-    ['5', 'Compensar: liberar el stock, marcar el pedido CANCELLED', ''],
-  ]}
-/>
+<Simulator concept="saga" />
 
 ## Una compensación no es un rollback
 

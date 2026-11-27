@@ -6,7 +6,7 @@ order: 7
 learningObjective: Understand leases, owner tokens and fencing tokens.
 summary: A lock shared across pods is a lease with an owner, and it is only safe if the protected resource checks a fencing token.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 When the shared state is not a single database row, pods need a **distributed lock** held in a shared coordinator such as Redis, ZooKeeper or a database table. It must never be a lock that can be held forever, so it is a **lease**: it expires after a TTL.
 
@@ -46,17 +46,7 @@ A plain `DEL` could delete a lock that expired and was acquired by another pod i
 
 A lease can expire while its holder is still running, because of a long GC pause, a slow network call or a stalled thread:
 
-<StaticWalkthrough
-  caption="Pod A pauses longer than its lease; pod B acquires the lock; when A wakes up it still believes it holds the lock and writes with a stale token, which the resource rejects thanks to the fencing token."
-  columns={['Pod A', 'Pod B', 'Lock / resource']}
-  rows={[
-    ['acquires the lock, token 33', '', 'owner A, token 33'],
-    ['paused (GC, network stall)', '', 'lease expires'],
-    ['', 'acquires the lock, token 34', 'owner B, token 34'],
-    ['', 'writes with token 34', 'accepted, highest token seen = 34'],
-    ['resumes, writes with token 33', '', 'rejected: 33 < 34'],
-  ]}
-/>
+<Simulator concept="distributed-locking" />
 
 A **fencing token** is a number that increases with every acquisition. The **protected resource** (the database) remembers the highest token it has seen and rejects older ones:
 

@@ -1,0 +1,20 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: transaction-isolation
+caption: "Two transactions lock the same two rows in opposite order and wait for each other forever; the database detects the cycle and aborts one of them."
+actors:
+  - "Transaction A"
+  - "Transaction B"
+  - "Database"
+steps:
+  - cells: ["locks row 1", "", "A holds 1"]
+    state: "Row 1: held by A. Row 2: free. Waiting: nobody."
+  - cells: ["", "locks row 2", "B holds 2"]
+    state: "Row 1: held by A. Row 2: held by B. Waiting: nobody."
+  - cells: ["requests row 2 → waits for B", "", "A waits"]
+    state: "Row 1: held by A. Row 2: held by B. Waiting: A, for row 2."
+  - cells: ["", "requests row 1 → waits for A", "cycle detected"]
+    state: "Row 1: held by A. Row 2: held by B. Waiting: A for B and B for A, a cycle."
+    note: "Neither can go on and neither will release on its own: without detection both would wait forever, or until a lock timeout."
+  - cells: ["", "aborted as the victim (deadlock error)", "A continues, B must retry"]
+    state: "Row 1: held by A. Row 2: held by A, granted when B's locks were released. B was rolled back."
+    note: "The database picks the victim and rolls back its whole transaction; the application must retry it. Locking rows always in the same order prevents the cycle."

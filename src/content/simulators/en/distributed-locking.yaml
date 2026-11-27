@@ -1,0 +1,21 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: distributed-locking
+caption: "Pod A pauses longer than its lease; pod B acquires the lock; when A wakes up it still believes it holds the lock and writes with a stale token, which the resource rejects thanks to the fencing token."
+actors:
+  - "Pod A"
+  - "Pod B"
+  - "Lock / resource"
+steps:
+  - cells: ["acquires the lock, token 33", "", "owner A, token 33"]
+    state: "Lock: owner A, token 33. Resource: no writes accepted yet."
+  - cells: ["paused (GC, network stall)", "", "lease expires"]
+    state: "Lock: free, A's lease expired. A still believes it holds the lock."
+    note: "A cannot notice its own pause: from its point of view no time has passed."
+  - cells: ["", "acquires the lock, token 34", "owner B, token 34"]
+    state: "Lock: owner B, token 34. A still believes it holds the lock with token 33."
+    note: "The token grows on every acquisition, so a newer owner always has a higher token."
+  - cells: ["", "writes with token 34", "accepted, highest token seen = 34"]
+    state: "Lock: owner B, token 34. Resource: highest token seen = 34."
+  - cells: ["resumes, writes with token 33", "", "rejected: 33 < 34"]
+    state: "Lock: owner B, token 34. Resource: highest token seen = 34; A's stale write was rejected."
+    note: "The lock alone cannot stop A: the resource has to check the fencing token on every write."

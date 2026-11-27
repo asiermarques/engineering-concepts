@@ -5,14 +5,15 @@ import { validateContent } from './validateContent';
 
 /**
  * Loads every collection and fails the build with all cross-file violations at once
- * (missing translations, too few challenges, mismatching options...). Per-file shape is
+ * (missing translations, too few challenges, mismatching options, Simulator steps...). Per-file shape is
  * already enforced by the Zod schemas of the collections.
  */
 export async function loadContent() {
-  const [topics, concepts, assessments] = await Promise.all([
+  const [topics, concepts, assessments, simulators] = await Promise.all([
     getCollection('topics'),
     getCollection('concepts'),
     getCollection('challenges'),
+    getCollection('simulators'),
   ]);
 
   const errors: string[] = [];
@@ -44,6 +45,14 @@ export async function loadContent() {
         errors.push(`Challenges file "${a.id}" must be named after its concept "${a.data.concept}"`);
       }
       return [{ locale, concept: a.data.concept, challenges: a.data.challenges as MultipleChoiceChallenge[] }];
+    }),
+    simulators: simulators.flatMap((s) => {
+      const locale = localeOf(s.id, 'Simulator');
+      if (!locale) return [];
+      if (s.id !== `${locale}/${s.data.concept}`) {
+        errors.push(`Simulator file "${s.id}" must be named after its concept "${s.data.concept}"`);
+      }
+      return [{ locale, concept: s.data.concept, actors: s.data.actors, steps: s.data.steps }];
     }),
   };
 

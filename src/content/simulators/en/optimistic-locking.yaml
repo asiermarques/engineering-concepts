@@ -1,0 +1,24 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: optimistic-locking
+caption: "Two clients edit the same account with versioning: the second write finds version 4 instead of 3, affects 0 rows and must reload and retry."
+actors:
+  - "Client A"
+  - "Client B"
+  - "Row in the database"
+steps:
+  - cells: ["read: balance 100, version 3", "", "balance 100, version 3"]
+    state: "Row at version 3. A holds a copy of version 3."
+  - cells: ["", "read: balance 100, version 3", "balance 100, version 3"]
+    state: "Row at version 3. A and B both hold a copy of version 3."
+    note: "Neither read took a lock: both clients will base their write on the same version."
+  - cells: ["UPDATE ... WHERE version = 3 → 1 row", "", "balance 70, version 4"]
+    state: "Row at version 4, balance 70. A's withdrawal is applied; B still holds version 3."
+    note: "The version check and the increment happen in the same statement, so only one writer can match version 3."
+  - cells: ["", "UPDATE ... WHERE version = 3 → 0 rows (conflict)", "balance 70, version 4"]
+    state: "Row unchanged at version 4. B's write hit a conflict: nothing was written."
+    note: "0 affected rows is the conflict signal: ignoring it would silently lose B's withdrawal."
+  - cells: ["", "reload: balance 70, version 4", "balance 70, version 4"]
+    state: "Row at version 4. B now holds a copy of version 4."
+    note: "B recomputes from the new balance. With JPA the retry runs in a new transaction."
+  - cells: ["", "UPDATE ... WHERE version = 4 → 1 row", "balance 40, version 5"]
+    state: "Row at version 5, balance 40. Both withdrawals are applied and none was lost."

@@ -6,23 +6,13 @@ order: 13
 learningObjective: Coordinate distributed operations with local transactions and compensations.
 summary: A saga replaces one distributed transaction with a sequence of local transactions, each with a compensating action.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 A database transaction does not automatically cover several REST calls to different microservices. A purchase that reserves stock, authorizes a payment and creates an order in three services is the typical case. A checkout touches several services: inventory, payments, shipping. Each owns its database, so there is no single ACID transaction across them, and a distributed two-phase commit is slow, couples availability and is often unavailable across services and third parties.
 
 A **saga** is a sequence of **local transactions**. Each step commits in its own service. If a later step fails, the saga runs **compensating actions** for the steps already done.
 
-<StaticWalkthrough
-  caption="Checkout saga: stock is reserved, the payment is charged and the shipment fails, so the saga compensates in reverse order by refunding the payment and releasing the stock."
-  columns={['Step', 'Local transaction', 'Compensation if a later step fails']}
-  rows={[
-    ['1', 'Reserve stock (inventory)', 'Release the reservation'],
-    ['2', 'Charge the card (payments)', 'Refund the payment'],
-    ['3', 'Create the shipment (shipping) → fails', 'Nothing to undo; start compensating steps 2 and 1'],
-    ['4', 'Compensate: refund the payment', ''],
-    ['5', 'Compensate: release the stock, mark the order CANCELLED', ''],
-  ]}
-/>
+<Simulator concept="saga" />
 
 ## A compensation is not a rollback
 

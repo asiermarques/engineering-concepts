@@ -1,0 +1,19 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: concurrency-limiting
+caption: "A semaphore with 3 permits and 7 simultaneous requests: 3 run and the other 4 wait or are rejected, depending on the policy."
+actors:
+  - "Requests 1–3"
+  - "Requests 4–7"
+  - "Semaphore (3 permits)"
+steps:
+  - cells: ["arrive", "arrive", "3 of 3 free"]
+    state: "Free permits: 3 of 3. Running: 0. Waiting: 0."
+    note: "7 requests arrive at once; the semaphore lets at most 3 run at the same time."
+  - cells: ["acquire() → granted, they run", "acquire() → no permit: they wait, or tryAcquire() → rejected", "0 of 3 free"]
+    state: "Free permits: 0 of 3. Running: 3. Left over: 4 (waiting: 4 with acquire(), or rejected: 4 with tryAcquire())."
+    note: "The policy decides what happens to the excess: acquire() waits for a permit; tryAcquire() fails at once so the caller can reject the request."
+  - cells: ["request 1 finishes and calls release()", "", "1 of 3 free"]
+    state: "Free permits: 1 of 3. Running: 2. Waiting: 4 (with acquire())."
+    note: "Release in a finally block: a permit that is never returned is lost for good."
+  - cells: ["", "request 4 takes the free permit and runs", "0 of 3 free"]
+    state: "Free permits: 0 of 3. Running: 3. Waiting: 3 (with acquire())."

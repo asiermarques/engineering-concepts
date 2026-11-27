@@ -6,7 +6,7 @@ order: 9
 learningObjective: Tell concurrency, parallelism and blocking operations apart.
 summary: Concurrency is about structuring overlapping work, parallelism is about running it at the same instant, and blocking a thread wastes it.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 - **Concurrency**: several tasks are in progress and overlap in time. One core can do it by switching between them.
 - **Parallelism**: several tasks literally run at the same instant on different cores.
@@ -68,14 +68,7 @@ A coroutine does not magically turn a blocking operation into a non-blocking one
 
 ## Concurrent versus sequential
 
-<StaticWalkthrough
-  caption="Three independent calls of 200 ms each: sequentially they take about 600 ms, concurrently about 200 ms, even on a single thread if the I/O is non-blocking, because the time is spent waiting."
-  columns={['Approach', 'Timeline', 'Total']}
-  rows={[
-    ['Sequential', 'call 1 (0–200), call 2 (200–400), call 3 (400–600)', '~600 ms'],
-    ['Concurrent (I/O-bound)', 'calls 1, 2 and 3 all start at 0 and wait together', '~200 ms'],
-  ]}
-/>
+<Simulator concept="coroutines-threads" />
 
 ## Choose by workload
 

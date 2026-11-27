@@ -1,0 +1,24 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: optimistic-locking
+caption: "Dos clientes editan la misma cuenta con versionado: la segunda escritura encuentra la versión 4 en vez de la 3, afecta a 0 filas y debe recargar y reintentar."
+actors:
+  - "Cliente A"
+  - "Cliente B"
+  - "Fila en la base de datos"
+steps:
+  - cells: ["lee: balance 100, versión 3", "", "balance 100, versión 3"]
+    state: "Fila en la versión 3. A tiene una copia de la versión 3."
+  - cells: ["", "lee: balance 100, versión 3", "balance 100, versión 3"]
+    state: "Fila en la versión 3. A y B tienen una copia de la versión 3."
+    note: "Ninguna lectura tomó un lock: los dos clientes basarán su escritura en la misma versión."
+  - cells: ["UPDATE ... WHERE version = 3 → 1 fila", "", "balance 70, versión 4"]
+    state: "Fila en la versión 4, balance 70. La retirada de A se aplica; B sigue con la versión 3."
+    note: "La comprobación de la versión y el incremento van en la misma sentencia, así que solo un escritor puede coincidir con la versión 3."
+  - cells: ["", "UPDATE ... WHERE version = 3 → 0 filas (conflicto)", "balance 70, versión 4"]
+    state: "Fila sin cambios en la versión 4. La escritura de B encontró un conflicto: no se escribió nada."
+    note: "0 filas afectadas es la señal de conflicto: ignorarla perdería en silencio la retirada de B."
+  - cells: ["", "recarga: balance 70, versión 4", "balance 70, versión 4"]
+    state: "Fila en la versión 4. B tiene ahora una copia de la versión 4."
+    note: "B recalcula a partir del nuevo balance. Con JPA el reintento se ejecuta en una transacción nueva."
+  - cells: ["", "UPDATE ... WHERE version = 4 → 1 fila", "balance 40, versión 5"]
+    state: "Fila en la versión 5, balance 40. Las dos retiradas se aplican y ninguna se pierde."

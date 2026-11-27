@@ -1,0 +1,23 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: saga
+caption: "Saga de checkout: se reserva el stock, se cobra el pago y falla el envío, así que la saga compensa en orden inverso reembolsando el pago y liberando el stock."
+actors:
+  - "Inventario"
+  - "Pagos"
+  - "Envíos"
+steps:
+  - cells: ["reserva stock → confirmado", "", ""]
+    state: "Pedido PENDING. Stock reservado. Pago: sin cobrar. Envío: ninguno."
+    note: "Cada paso confirma en su propio servicio y tiene una compensación preparada; para este, liberar la reserva."
+  - cells: ["", "cobra la tarjeta → confirmado", ""]
+    state: "Pedido PENDING. Stock reservado. Pago cobrado. Envío: ninguno."
+    note: "Su compensación es reembolsar el pago."
+  - cells: ["", "", "crea el envío → falla"]
+    state: "Pedido PENDING. Stock reservado, pago cobrado, envío fallido. La compensación empieza por el paso 2 y sigue con el 1."
+    note: "El paso que falló no confirmó nada, así que ahí no hay nada que deshacer."
+  - cells: ["", "compensa: reembolsa el pago", ""]
+    state: "Pedido PENDING. Stock reservado, pago reembolsado."
+    note: "Las compensaciones se ejecutan en orden inverso y deben poder reintentarse sin riesgo: un reembolso que agota el timeout se reintenta, no se olvida."
+  - cells: ["compensa: libera el stock", "", ""]
+    state: "Pedido CANCELLED. Stock liberado, pago reembolsado. Sin envío."
+    note: "Compensar no borra la historia: el cliente puede haber visto el cobro y después el reembolso."

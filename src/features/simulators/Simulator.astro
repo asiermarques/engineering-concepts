@@ -1,0 +1,28 @@
+---
+/**
+ * Embeds a Concept's Simulator in its MDX: `<Simulator concept="optimistic-locking" />`.
+ * The sequence comes from `src/content/simulators/<locale>/<concept>.yaml`. Without JavaScript
+ * the Static walkthrough is shown; the React island replaces it when it hydrates.
+ */
+import { getEntry } from 'astro:content';
+import { isLocale, ui } from '../../i18n/ui';
+import { Simulator as Island } from './Simulator';
+import StaticWalkthrough from './StaticWalkthrough.astro';
+
+interface Props {
+  /** Stable id of the Concept the sequence belongs to. */
+  concept: string;
+}
+const { concept } = Astro.props;
+const locale = Astro.currentLocale;
+if (!isLocale(locale)) throw new Error(`Simulator "${concept}" is rendered outside a locale route`);
+const entry = await getEntry('simulators', `${locale}/${concept}`);
+if (!entry) throw new Error(`Simulator "${concept}" has no sequence in src/content/simulators/${locale}/${concept}.yaml`);
+const { caption, actors, steps } = entry.data;
+const sequence = { caption, actors, steps };
+const labels = ui[locale].simulator;
+---
+
+<Island client:load sequence={sequence} labels={labels}>
+  <StaticWalkthrough sequence={sequence} labels={labels} />
+</Island>

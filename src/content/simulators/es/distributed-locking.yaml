@@ -1,0 +1,21 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: distributed-locking
+caption: "El pod A se pausa más que su lease; el pod B adquiere el lock; cuando A despierta cree que aún tiene el lock y escribe con un token antiguo, que el recurso rechaza gracias al fencing token."
+actors:
+  - "Pod A"
+  - "Pod B"
+  - "Lock / recurso"
+steps:
+  - cells: ["adquiere el lock, token 33", "", "propietario A, token 33"]
+    state: "Lock: propietario A, token 33. Recurso: aún no ha aceptado escrituras."
+  - cells: ["se pausa (GC, bloqueo de red)", "", "el lease caduca"]
+    state: "Lock: libre, el lease de A caducó. A sigue creyendo que tiene el lock."
+    note: "A no puede notar su propia pausa: desde su punto de vista no ha pasado el tiempo."
+  - cells: ["", "adquiere el lock, token 34", "propietario B, token 34"]
+    state: "Lock: propietario B, token 34. A sigue creyendo que tiene el lock con el token 33."
+    note: "El token crece en cada adquisición, así que un propietario más reciente siempre tiene un token mayor."
+  - cells: ["", "escribe con el token 34", "aceptado, token más alto visto = 34"]
+    state: "Lock: propietario B, token 34. Recurso: token más alto visto = 34."
+  - cells: ["se reanuda, escribe con el token 33", "", "rechazado: 33 < 34"]
+    state: "Lock: propietario B, token 34. Recurso: token más alto visto = 34; la escritura obsoleta de A se rechazó."
+    note: "El lock por sí solo no puede detener a A: el recurso tiene que comprobar el fencing token en cada escritura."

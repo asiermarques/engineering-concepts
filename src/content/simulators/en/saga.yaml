@@ -1,0 +1,23 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: saga
+caption: "Checkout saga: stock is reserved, the payment is charged and the shipment fails, so the saga compensates in reverse order by refunding the payment and releasing the stock."
+actors:
+  - "Inventory"
+  - "Payments"
+  - "Shipping"
+steps:
+  - cells: ["reserve stock → committed", "", ""]
+    state: "Order PENDING. Stock reserved. Payment: not charged. Shipment: none."
+    note: "Each step commits in its own service and has a compensation ready; for this one, releasing the reservation."
+  - cells: ["", "charge the card → committed", ""]
+    state: "Order PENDING. Stock reserved. Payment charged. Shipment: none."
+    note: "Its compensation is refunding the payment."
+  - cells: ["", "", "create the shipment → fails"]
+    state: "Order PENDING. Stock reserved, payment charged, shipment failed. Compensation starts with step 2, then step 1."
+    note: "The failed step committed nothing, so there is nothing to undo there."
+  - cells: ["", "compensate: refund the payment", ""]
+    state: "Order PENDING. Stock reserved, payment refunded."
+    note: "Compensations run in reverse order and must be safe to retry: a refund that times out is retried, not forgotten."
+  - cells: ["compensate: release the stock", "", ""]
+    state: "Order CANCELLED. Stock released, payment refunded. No shipment."
+    note: "Compensating does not erase history: the customer may have seen the charge and then the refund."

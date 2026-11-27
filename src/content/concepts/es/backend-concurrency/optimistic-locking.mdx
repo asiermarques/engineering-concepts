@@ -6,7 +6,7 @@ order: 4
 learningObjective: Implementar un control de concurrencia mediante versionado y actualizaciones condicionales.
 summary: Asume que los conflictos son raros, los detecta al escribir con una versión y los reintenta o los notifica.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 El **optimistic locking** no toma ningún lock al leer. Cada fila lleva una **versión**, y la escritura solo tiene éxito si la versión sigue siendo la que leíste. Si alguien escribió antes, tu actualización no coincide con ninguna fila y sabes que hubo un conflicto.
 
@@ -20,18 +20,7 @@ WHERE  id = 7
 -- filas afectadas = 1 → has ganado; 0 → otra petición cambió la fila
 ```
 
-<StaticWalkthrough
-  caption="Dos clientes editan la misma cuenta con versionado: la segunda escritura encuentra la versión 4 en vez de la 3, afecta a 0 filas y debe recargar y reintentar."
-  columns={['Cliente A', 'Cliente B', 'Fila en la base de datos']}
-  rows={[
-    ['lee: balance 100, versión 3', '', 'balance 100, versión 3'],
-    ['', 'lee: balance 100, versión 3', 'balance 100, versión 3'],
-    ['UPDATE ... WHERE version = 3 → 1 fila', '', 'balance 70, versión 4'],
-    ['', 'UPDATE ... WHERE version = 3 → 0 filas (conflicto)', 'balance 70, versión 4'],
-    ['', 'recarga: balance 70, versión 4', 'balance 70, versión 4'],
-    ['', 'UPDATE ... WHERE version = 4 → 1 fila', 'balance 40, versión 5'],
-  ]}
-/>
+<Simulator concept="optimistic-locking" />
 
 ## En código
 

@@ -1,4 +1,5 @@
 import type { MultipleChoiceChallenge } from '../challenges/schema';
+import type { SimulatorSequence } from '../simulators/schema';
 
 export const MIN_CHALLENGES = 3;
 
@@ -7,10 +8,12 @@ export interface ContentSnapshot {
   topics: { locale: string; id: string }[];
   concepts: { locale: string; id: string; topic: string; order: number }[];
   assessments: { locale: string; concept: string; challenges: MultipleChoiceChallenge[] }[];
+  simulators: ({ locale: string; concept: string } & Pick<SimulatorSequence, 'actors' | 'steps'>)[];
 }
 
 /**
- * Cross-file content rules that a per-file schema cannot express (BR-001, BR-002, BR-004).
+ * Cross-file content rules that a per-file schema cannot express (requirement 001: BR-001, BR-002,
+ * BR-004; requirement 003: BR-001, BR-002 for Simulators).
  * Returns every violation, not only the first one.
  */
 export function validateContent(content: ContentSnapshot): string[] {
@@ -102,6 +105,47 @@ export function validateContent(content: ContentSnapshot): string[] {
     }
   }
 
+  errors.push(...validateSimulators(content, conceptIds));
+  return errors;
+}
+
+function validateSimulators(content: ContentSnapshot, conceptIds: string[]): string[] {
+  const errors: string[] = [];
+  const [reference, ...others] = content.locales;
+  const find = (locale: string, concept: string) =>
+    content.simulators.find((s) => s.locale === locale && s.concept === concept);
+
+  for (const locale of content.locales) {
+    const seen = new Set<string>();
+    for (const s of content.simulators.filter((s) => s.locale === locale)) {
+      if (seen.has(s.concept)) errors.push(`Duplicated simulator "${s.concept}" in "${locale}"`);
+      seen.add(s.concept);
+      if (!conceptIds.includes(s.concept)) errors.push(`Simulator in "${locale}" points to unknown concept "${s.concept}"`);
+    }
+  }
+
+  for (const concept of unique(content.simulators.map((s) => s.concept))) {
+    for (const locale of content.locales) {
+      if (!find(locale, concept)) errors.push(`Simulator "${concept}" is missing the "${locale}" translation`);
+    }
+    const base = reference ? find(reference, concept) : undefined;
+    for (const locale of others) {
+      const other = find(locale, concept);
+      if (!base || !other) continue;
+      if (other.steps.length !== base.steps.length) {
+        errors.push(`Simulator "${concept}" has ${other.steps.length} steps in "${locale}" but ${base.steps.length} in "${reference}"`);
+      }
+      if (other.actors.length !== base.actors.length) {
+        errors.push(`Simulator "${concept}" has ${other.actors.length} actors in "${locale}" but ${base.actors.length} in "${reference}"`);
+      }
+      const shared = Math.min(base.steps.length, other.steps.length);
+      for (let i = 0; i < shared; i++) {
+        const [inBase, inOther] = [Boolean(base.steps[i]!.note), Boolean(other.steps[i]!.note)];
+        if (inBase && !inOther) errors.push(`Simulator "${concept}": step ${i + 1} has a note in "${reference}" but not in "${locale}"`);
+        if (inOther && !inBase) errors.push(`Simulator "${concept}": step ${i + 1} has a note in "${locale}" but not in "${reference}"`);
+      }
+    }
+  }
   return errors;
 }
 

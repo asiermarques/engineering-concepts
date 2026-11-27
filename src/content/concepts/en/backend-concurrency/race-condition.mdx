@@ -6,7 +6,7 @@ order: 1
 learningObjective: Explain why reading, checking and writing is not safe.
 summary: Two requests interleave between the check and the write, and the outcome depends on timing.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 A **race condition** happens when the result depends on the order in which concurrent operations interleave. The classic shape is **read → check → write** (check-then-act): each step is fine alone, but nothing stops another request from running between them.
 
@@ -41,19 +41,7 @@ POST /orders/42/pay HTTP/1.1
 POST /orders/42/pay HTTP/1.1
 ```
 
-<StaticWalkthrough
-  caption="Two requests pay the same order: both read PENDING before either writes PAID, so the customer is charged twice."
-  columns={['Request A', 'Request B', 'Order status in the database']}
-  rows={[
-    ['read order 42 → PENDING', '', 'PENDING'],
-    ['', 'read order 42 → PENDING', 'PENDING'],
-    ['check: PENDING, OK to charge', '', 'PENDING'],
-    ['', 'check: PENDING, OK to charge', 'PENDING'],
-    ['charge the card', '', 'PENDING'],
-    ['', 'charge the card', 'PENDING'],
-    ['write PAID', 'write PAID', 'PAID (charged twice)'],
-  ]}
-/>
+<Simulator concept="race-condition" />
 
 ## Lost update
 

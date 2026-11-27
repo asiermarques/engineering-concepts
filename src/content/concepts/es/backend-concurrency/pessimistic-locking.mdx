@@ -6,7 +6,7 @@ order: 5
 learningObjective: Explicar SELECT FOR UPDATE y el coste de mantener bloqueos.
 summary: Bloquea las filas que vas a cambiar, haz el trabajo y confirma; los demás esperan.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 El **pessimistic locking** asume que los conflictos ocurrirán y los evita bloqueando antes las filas. En SQL la herramienta es `SELECT ... FOR UPDATE`, que bloquea las filas seleccionadas **hasta que termina la transacción**.
 
@@ -18,16 +18,7 @@ UPDATE orders SET status = 'PAID' WHERE id = 42;
 COMMIT;                                                       -- libera el lock
 ```
 
-<StaticWalkthrough
-  caption="Con SELECT FOR UPDATE la segunda transacción espera a que la primera confirme, lee el nuevo estado y se detiene."
-  columns={['Transacción A', 'Transacción B', 'Fila 42']}
-  rows={[
-    ['BEGIN; SELECT ... FOR UPDATE → PENDING', '', 'bloqueada por A'],
-    ['', 'BEGIN; SELECT ... FOR UPDATE → espera', 'bloqueada por A'],
-    ['UPDATE status = PAID; COMMIT', '', 'PAID, desbloqueada'],
-    ['', 'el SELECT devuelve: PAID → no cobra', 'PAID'],
-  ]}
-/>
+<Simulator concept="pessimistic-locking" />
 
 ```java
 @Transactional

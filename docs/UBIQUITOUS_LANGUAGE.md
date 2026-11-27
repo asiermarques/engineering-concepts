@@ -9,7 +9,7 @@ Canonical terms are in English and are used in code, docs and the English UI. Th
 | **Topic** | Tema | Ordered set of **Concepts** about one area of engineering, e.g. *Concurrency and consistency in backend*. | Route, module, track, course |
 | **Concept** | Concepto | The site's reading unit, about one engineering mechanism, with its explanation, examples and **Assessment**. | Lesson, article, page, section, card |
 | **Learning objective** | Objetivo de aprendizaje | Sentence stating what the **Learner** should be able to do after studying a **Concept**. | Description, checklist item, goal |
-| **Static walkthrough** | Versión estática | Non-interactive representation (table or step diagram) of what a **Simulator** will show. | Placeholder, simulator image |
+| **Static walkthrough** | Versión estática | The **Simulator**'s version without JavaScript: a table with every **Step**, its **Simulator state** and its **Step notes**. | Placeholder, simulator image |
 | **Translation** | Traducción | Version of a **Concept** or **Challenge** in a specific **Locale**, with the same id in every locale. | Variant, copy |
 | **Locale** | Idioma | Language the site is presented in: Spanish (`es`) or English (`en`). | Language, region |
 
@@ -25,7 +25,10 @@ Canonical terms are in English and are used in code, docs and the English UI. Th
 | **Answer** | Respuesta | The selection a **Learner** makes in a **Challenge**. | Attempt, submission |
 | **Assessment** | Evaluación | The set of **Challenges** of a **Concept**, which the **Learner** solves in one go. | Challenge (as a set), quiz, test, exam |
 | **Result** | Resultado | Correct answers over total of a completed **Assessment**, e.g. 3/4. | Score, grade, mark, XP |
-| **Simulator** | Simulador | Interactive model of a mechanism (e.g. token bucket) that the **Learner** manipulates, inside the reading or as a **Challenge**. | Demo, animation, playground |
+| **Simulator** | Simulador | Interactive model of a mechanism (e.g. token bucket) that the **Learner** manipulates, inside the reading or as a **Challenge**. Inside the reading it is an **Author**-written sequence of **Steps** the **Learner** steps or plays through. | Demo, animation, playground |
+| **Step** | Paso | One moment of a **Simulator** sequence: what each actor does at that point, shown in the actor's lane. | Frame, tick, row |
+| **Simulator state** | Estado del simulador | The state after a **Step** (e.g. row version, lock holder, free permits), written by the **Author** for every **Step**. | Result (reserved for the **Assessment**), snapshot |
+| **Step note** | Nota del paso | Optional short **Author** text attached to a **Step** that explains why it matters. | Hint, explanation (reserved for **Options**), tooltip |
 
 ## People
 
@@ -54,6 +57,7 @@ Canonical terms are in English and are used in code, docs and the English UI. Th
 - A **Concept** belongs to exactly one **Topic** and has exactly one **Learning objective**.
 - A **Concept** has exactly one **Assessment**, made of one or more **Challenges** (at least 3 in requirement 001).
 - A **Challenge** belongs to exactly one **Concept** and has exactly one **Challenge type**.
+- A **Simulator** inside the reading belongs to one **Concept** and has one or more **Steps**; every **Step** has a **Simulator state** and at most one **Step note**. Its **Translations** have the same number of **Steps** and actors.
 - A **Multiple-choice question** has two or more **Options**, at least one correct, and each **Option** has exactly one **Explanation**.
 - A completed **Assessment** produces exactly one **Result**; the **Result** is not **XP**.
 - Each **Concept** and each **Challenge** has one **Translation** per **Locale**.

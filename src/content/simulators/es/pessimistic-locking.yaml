@@ -1,0 +1,19 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: pessimistic-locking
+caption: "Con SELECT FOR UPDATE la segunda transacción espera a que la primera confirme, lee el nuevo estado y se detiene."
+actors:
+  - "Transacción A"
+  - "Transacción B"
+  - "Fila 42"
+steps:
+  - cells: ["BEGIN; SELECT ... FOR UPDATE → PENDING", "", "bloqueada por A"]
+    state: "Fila 42: PENDING, bloqueada por A. B no ha empezado."
+  - cells: ["", "BEGIN; SELECT ... FOR UPDATE → espera", "bloqueada por A"]
+    state: "Fila 42: PENDING, bloqueada por A. B espera el lock de A."
+    note: "La lectura con bloqueo de B espera en lugar de devolver el PENDING obsoleto. Un SELECT normal sin FOR UPDATE no esperaría: con MVCC lee un snapshot."
+  - cells: ["UPDATE status = PAID; COMMIT", "", "PAID, desbloqueada"]
+    state: "Fila 42: PAID, lock liberado en el COMMIT de A. El SELECT de B puede continuar."
+    note: "El lock se mantiene hasta que termina la transacción: cada paso lento dentro de ella hace esperar más a B."
+  - cells: ["", "el SELECT devuelve: PAID → no cobra", "PAID"]
+    state: "Fila 42: PAID, ahora bloqueada por B hasta que B termine. Cobros: 1."
+    note: "Tras la espera, la lectura con bloqueo devuelve la última fila confirmada (PAID). En PostgreSQL con REPEATABLE READ falla en su lugar con un error de serialización, que hay que reintentar."

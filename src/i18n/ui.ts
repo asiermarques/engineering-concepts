@@ -44,6 +44,21 @@ export interface ProgressLabels {
   cancel: string;
 }
 
+export interface SimulatorLabels {
+  controls: string;
+  restart: string;
+  previous: string;
+  next: string;
+  play: string;
+  pause: string;
+  playing: string;
+  paused: string;
+  step: string;
+  of: string;
+  state: string;
+  note: string;
+}
+
 export interface UiStrings {
   siteTitle: string;
   skipToContent: string;
@@ -71,6 +86,7 @@ export interface UiStrings {
   allTopics: string;
   assessment: AssessmentLabels;
   progress: ProgressLabels;
+  simulator: SimulatorLabels;
 }
 
 export const ui: Record<Locale, UiStrings> = {
@@ -134,6 +150,20 @@ export const ui: Record<Locale, UiStrings> = {
       importInvalid: "This file can't be imported: it is not a valid progress file. Your progress has not changed.",
       cancel: 'Cancel',
     },
+    simulator: {
+      controls: 'Simulator controls',
+      restart: 'Restart',
+      previous: 'Previous',
+      next: 'Next',
+      play: 'Play',
+      pause: 'Pause',
+      playing: 'Playing',
+      paused: 'Paused',
+      step: 'Step',
+      of: 'of',
+      state: 'State',
+      note: 'Note',
+    },
   },
   es: {
     siteTitle: 'Engineering Concepts',
@@ -194,6 +224,20 @@ export const ui: Record<Locale, UiStrings> = {
       importDone: 'Progreso importado.',
       importInvalid: 'No se puede importar este archivo: no es un archivo de progreso válido. Tu progreso no ha cambiado.',
       cancel: 'Cancelar',
+    },
+    simulator: {
+      controls: 'Controles del simulador',
+      restart: 'Reiniciar',
+      previous: 'Anterior',
+      next: 'Siguiente',
+      play: 'Reproducir',
+      pause: 'Pausa',
+      playing: 'Reproduciendo',
+      paused: 'En pausa',
+      step: 'Paso',
+      of: 'de',
+      state: 'Estado',
+      note: 'Nota',
     },
   },
 };

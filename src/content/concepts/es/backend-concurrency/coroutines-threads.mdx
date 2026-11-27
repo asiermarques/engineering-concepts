@@ -6,7 +6,7 @@ order: 9
 learningObjective: Distinguir concurrencia, paralelismo y operaciones bloqueantes.
 summary: La concurrencia estructura trabajo que se solapa, el paralelismo lo ejecuta en el mismo instante, y bloquear un hilo lo desperdicia.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 - **Concurrencia**: varias tareas están en curso y se solapan en el tiempo. Un solo núcleo puede hacerlo alternando entre ellas.
 - **Paralelismo**: varias tareas se ejecutan literalmente en el mismo instante en núcleos distintos.
@@ -68,14 +68,7 @@ Los **virtual threads** (Java 21+) permiten mantener un estilo de programación 
 
 ## Concurrente frente a secuencial
 
-<StaticWalkthrough
-  caption="Tres llamadas independientes de 200 ms cada una: en secuencia tardan unos 600 ms, de forma concurrente unos 200 ms, incluso con un solo hilo si el I/O es no bloqueante, porque el tiempo se gasta esperando."
-  columns={['Enfoque', 'Línea de tiempo', 'Total']}
-  rows={[
-    ['Secuencial', 'llamada 1 (0–200), llamada 2 (200–400), llamada 3 (400–600)', '~600 ms'],
-    ['Concurrente (I/O-bound)', 'las llamadas 1, 2 y 3 empiezan en 0 y esperan a la vez', '~200 ms'],
-  ]}
-/>
+<Simulator concept="coroutines-threads" />
 
 ## Elegir según la carga
 

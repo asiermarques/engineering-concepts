@@ -6,7 +6,7 @@ order: 5
 learningObjective: Explain SELECT FOR UPDATE and the cost of holding locks.
 summary: Lock the rows you are going to change, do the work, commit; everybody else waits.
 ---
-import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+import Simulator from '../../../../features/simulators/Simulator.astro';
 
 **Pessimistic locking** assumes conflicts will happen and prevents them by locking the rows first. In SQL the tool is `SELECT ... FOR UPDATE`, which locks the selected rows **until the transaction ends**.
 
@@ -18,16 +18,7 @@ UPDATE orders SET status = 'PAID' WHERE id = 42;
 COMMIT;                                                       -- releases the lock
 ```
 
-<StaticWalkthrough
-  caption="With SELECT FOR UPDATE the second transaction waits for the first one to commit, then reads the new status and stops."
-  columns={['Transaction A', 'Transaction B', 'Row 42']}
-  rows={[
-    ['BEGIN; SELECT ... FOR UPDATE → PENDING', '', 'locked by A'],
-    ['', 'BEGIN; SELECT ... FOR UPDATE → waits', 'locked by A'],
-    ['UPDATE status = PAID; COMMIT', '', 'PAID, unlocked'],
-    ['', 'the SELECT returns: PAID → does not charge', 'PAID'],
-  ]}
-/>
+<Simulator concept="pessimistic-locking" />
 
 ```java
 @Transactional

@@ -1,0 +1,21 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: fan-out-fan-in
+caption: "Three independent REST calls: in sequence the latency is the sum of the three; in fan-out/fan-in it is roughly the slowest one."
+actors:
+  - "Sequential"
+  - "Fan-out / fan-in"
+steps:
+  - cells: ["t = 0: call stock-service", "t = 0: call stock, vouchers and customers at once"]
+    state: "Elapsed: 0 ms. Sequential: 0 of 3 responses. Fan-out: 0 of 3 responses."
+    note: "Durations: stock-service 100 ms, vouchers-service 200 ms, customers-service 50 ms. The calls are independent: none needs another one's result."
+  - cells: ["", "t = 50: customers-service responds"]
+    state: "Elapsed: 50 ms. Sequential: 0 of 3 responses. Fan-out: 1 of 3 responses."
+  - cells: ["t = 100: stock-service responds, call vouchers-service", "t = 100: stock-service responds"]
+    state: "Elapsed: 100 ms. Sequential: 1 of 3 responses. Fan-out: 2 of 3 responses."
+  - cells: ["", "t = 200: vouchers-service responds; fan-in combines the 3 results"]
+    state: "Elapsed: 200 ms. Sequential: 1 of 3 responses. Fan-out: done in ≈ 200 ms, the slowest call."
+  - cells: ["t = 300: vouchers-service responds, call customers-service", ""]
+    state: "Elapsed: 300 ms. Sequential: 2 of 3 responses. Fan-out: finished at ≈ 200 ms."
+  - cells: ["t = 350: customers-service responds", ""]
+    state: "Elapsed: 350 ms. Sequential: done in 350 ms, the sum of the three. Fan-out: done in ≈ 200 ms, 43% less."
+    note: "Fan-out only pays off for independent calls, and it sends all the load to the downstream services at the same moment."

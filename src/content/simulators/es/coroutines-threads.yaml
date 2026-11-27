@@ -1,0 +1,17 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: coroutines-threads
+caption: "Tres llamadas independientes de 200 ms cada una: en secuencia tardan unos 600 ms, de forma concurrente unos 200 ms, incluso con un solo hilo si el I/O es no bloqueante, porque el tiempo se gasta esperando."
+actors:
+  - "Secuencial"
+  - "Concurrente (I/O-bound)"
+steps:
+  - cells: ["t = 0: empieza la llamada 1", "t = 0: empiezan las llamadas 1, 2 y 3"]
+    state: "Transcurrido: 0 ms. Secuencial: 0 de 3 terminadas. Concurrente: 0 de 3 terminadas."
+    note: "De forma concurrente, un solo hilo puede lanzar las tres si el I/O es no bloqueante: mientras las llamadas esperan, el hilo queda libre."
+  - cells: ["t = 200: termina la llamada 1, empieza la 2", "t = 200: terminan las llamadas 1, 2 y 3"]
+    state: "Transcurrido: 200 ms. Secuencial: 1 de 3 terminadas. Concurrente: 3 de 3 terminadas, total ~200 ms."
+  - cells: ["t = 400: termina la llamada 2, empieza la 3", ""]
+    state: "Transcurrido: 400 ms. Secuencial: 2 de 3 terminadas. Concurrente: terminó en ~200 ms."
+  - cells: ["t = 600: termina la llamada 3", ""]
+    state: "Transcurrido: 600 ms. Secuencial: 3 de 3 terminadas, total ~600 ms. Concurrente: total ~200 ms."
+    note: "El tiempo se gastó esperando, no calculando, así que solapar las esperas ahorra unos 400 ms."

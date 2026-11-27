@@ -1,0 +1,21 @@
+# Written by Claude from the original Static walkthrough; pending technical review by the Author.
+concept: fan-out-fan-in
+caption: "Tres llamadas REST independientes: en secuencia la latencia es la suma de las tres; con fan-out/fan-in es aproximadamente la de la más lenta."
+actors:
+  - "Secuencial"
+  - "Fan-out / fan-in"
+steps:
+  - cells: ["t = 0: llama a stock-service", "t = 0: llama a stock, vouchers y customers a la vez"]
+    state: "Transcurrido: 0 ms. Secuencial: 0 de 3 respuestas. Fan-out: 0 de 3 respuestas."
+    note: "Duraciones: stock-service 100 ms, vouchers-service 200 ms, customers-service 50 ms. Las llamadas son independientes: ninguna necesita el resultado de otra."
+  - cells: ["", "t = 50: responde customers-service"]
+    state: "Transcurrido: 50 ms. Secuencial: 0 de 3 respuestas. Fan-out: 1 de 3 respuestas."
+  - cells: ["t = 100: responde stock-service, llama a vouchers-service", "t = 100: responde stock-service"]
+    state: "Transcurrido: 100 ms. Secuencial: 1 de 3 respuestas. Fan-out: 2 de 3 respuestas."
+  - cells: ["", "t = 200: responde vouchers-service; el fan-in combina los 3 resultados"]
+    state: "Transcurrido: 200 ms. Secuencial: 1 de 3 respuestas. Fan-out: terminado en ≈ 200 ms, la llamada más lenta."
+  - cells: ["t = 300: responde vouchers-service, llama a customers-service", ""]
+    state: "Transcurrido: 300 ms. Secuencial: 2 de 3 respuestas. Fan-out: terminó en ≈ 200 ms."
+  - cells: ["t = 350: responde customers-service", ""]
+    state: "Transcurrido: 350 ms. Secuencial: terminado en 350 ms, la suma de las tres. Fan-out: terminado en ≈ 200 ms, un 43 % menos."
+    note: "El fan-out solo compensa con llamadas independientes, y envía toda la carga a los servicios de destino en el mismo instante."
