@@ -4,43 +4,71 @@ import { entryLocale, loadContent } from '../content-validation/loadContent';
 import { ui, type Locale } from '../../i18n/ui';
 import Layout from './Layout.astro';
 import { sortConcepts } from './navigation';
+import { conceptPath, homePath } from './paths';
 
 interface Props {
   locale: Locale;
-  /** Where the English page lives: `/` serves English too (FR-010). */
+  topicId: string;
+  /** URL of this topic in each locale. */
   alternates: Record<Locale, string>;
 }
-const { locale, alternates } = Astro.props;
+const { locale, topicId, alternates } = Astro.props;
 const t = ui[locale];
 
 const content = await loadContent();
-const topics = content.topics.filter((topic) => entryLocale(topic.id) === locale);
-const topic = topics[0];
-if (!topic) throw new Error(`No topic found for locale "${locale}"`);
+const topic = content.topics.find((entry) => entryLocale(entry.id) === locale && entry.data.id === topicId);
+if (!topic) throw new Error(`No topic "${topicId}" found for locale "${locale}"`);
 const { Content } = await render(topic);
 const concepts = sortConcepts(
   content.concepts.filter((c) => entryLocale(c.id) === locale && c.data.topic === topic.data.id).map((c) => ({ ...c, order: c.data.order })),
 );
+const first = concepts[0];
+const pad = (n: number) => String(n).padStart(2, '0');
 ---
 
-<Layout locale={locale} title={topic.data.title} description={topic.data.summary} alternates={alternates}>
-  <h1>{topic.data.title}</h1>
-  <div class="prose">
-    <Content />
-  </div>
-  <h2 class="section-title">{t.topicConcepts}</h2>
-  <ol class="concept-list" data-testid="concept-list">
+<Layout locale={locale} title={topic.data.title} description={topic.data.summary} alternates={alternates} width="wide">
+  <p class="breadcrumb back-link"><a href={homePath(locale)}><span aria-hidden="true">◀ </span>{t.allTopics}</a></p>
+  <section class="hero">
+    <p class="kicker">
+      <span class="kicker__chip">{t.topicLabel}</span>
+      <span>{concepts.length} {t.conceptsUnit}</span>
+    </p>
+    <h1>{topic.data.title}</h1>
+    <p class="hero__summary">{topic.data.summary}</p>
     {
-      concepts.map((concept) => (
-        <li>
-          <h2>
-            <a href={`/${locale}/concepts/${concept.data.id}/`}>{concept.data.title}</a>
-          </h2>
-          <p class="concept-list__objective">
-            <strong>{t.learningObjective}:</strong> {concept.data.learningObjective}
-          </p>
-        </li>
-      ))
+      first && (
+        <a class="button button--start" href={conceptPath(locale, first.data.id)}>
+          <span aria-hidden="true" class="button__glyph">▶</span> {t.start}: {first.data.title}
+        </a>
+      )
     }
-  </ol>
+  </section>
+
+  <div class="topic-layout">
+    <div class="prose prose--intro">
+      <Content />
+    </div>
+
+    <section class="map" aria-labelledby="concepts-heading">
+      <h2 id="concepts-heading" class="section-title">{t.topicConcepts}</h2>
+      <ol class="concept-list stage-map" data-testid="concept-list">
+        {
+          concepts.map((concept, index) => (
+            <li class="stage" style={`--i:${index}`}>
+              <span class="stage__num" aria-hidden="true">{pad(index + 1)}</span>
+              <div class="stage__body">
+                <h2>
+                  <a class="stage__link" href={conceptPath(locale, concept.data.id)}>{concept.data.title}</a>
+                </h2>
+                <p class="concept-list__objective">
+                  <strong>{t.learningObjective}:</strong> {concept.data.learningObjective}
+                </p>
+              </div>
+              <span class="stage__go" aria-hidden="true">▶</span>
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+  </div>
 </Layout>

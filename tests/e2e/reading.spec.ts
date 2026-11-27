@@ -1,9 +1,31 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('topic page', () => {
-  test('root shows the English topic with its concepts in order and their learning objectives', async ({ page }) => {
+test.describe('home page', () => {
+  test('root lists the topics as cards and a card leads to its topic', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Choose a topic');
+    const cards = page.locator('[data-testid="topic-list"] > li');
+    await expect(cards).toHaveCount(1);
+    await expect(cards.first()).toContainText('13 concepts');
+    await cards.first().getByRole('link', { name: 'Concurrency and consistency in backend' }).click();
+    await expect(page).toHaveURL(/\/en\/topics\/backend-concurrency\/$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Concurrency and consistency in backend');
+  });
+
+  test('language switcher on the root leads to the Spanish home page', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Español' }).click();
+    await expect(page).toHaveURL(/\/es\/$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Elige un tema');
+    await expect(page.getByRole('link', { name: 'Concurrencia y consistencia en backend' })).toBeVisible();
+  });
+});
+
+test.describe('topic page', () => {
+  test('shows the concepts in order with their learning objectives', async ({ page }) => {
+    await page.goto('/en/topics/backend-concurrency/');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Concurrency and consistency in backend');
     const titles = await page.locator('[data-testid="concept-list"] > li h2').allTextContents();
     expect(titles).toHaveLength(13);
@@ -12,12 +34,13 @@ test.describe('topic page', () => {
     await expect(page.getByText('Explain why reading, checking and writing is not safe.')).toBeVisible();
   });
 
-  test('language switcher on the root leads to the Spanish topic page', async ({ page }) => {
-    await page.goto('/');
+  test('keeps the same topic when switching language and links back to the home page', async ({ page }) => {
+    await page.goto('/en/topics/backend-concurrency/');
     await page.getByRole('link', { name: 'Español' }).click();
-    await expect(page).toHaveURL(/\/es\/$/);
-    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+    await expect(page).toHaveURL(/\/es\/topics\/backend-concurrency\/$/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Concurrencia y consistencia en backend');
+    await page.getByRole('link', { name: 'Todos los temas' }).click();
+    await expect(page).toHaveURL(/\/es\/$/);
   });
 });
 
@@ -50,6 +73,12 @@ test.describe('concept page', () => {
     await expect(page).toHaveURL(/\/en\/concepts\/atomicity\/$/);
     await page.getByRole('navigation', { name: 'Concept navigation' }).getByRole('link', { name: /Previous: Race condition/ }).click();
     await expect(page).toHaveURL(/\/en\/concepts\/race-condition\/$/);
+  });
+
+  test('links back to its topic', async ({ page }) => {
+    await page.goto('/en/concepts/atomicity/');
+    await page.getByRole('link', { name: 'All concepts' }).click();
+    await expect(page).toHaveURL(/\/en\/topics\/backend-concurrency\/$/);
   });
 
   test('the last concept has no next link', async ({ page }) => {

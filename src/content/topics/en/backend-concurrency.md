@@ -1,10 +1,8 @@
 ---
 id: backend-concurrency
 title: Concurrency and consistency in backend
-summary: How concurrent requests break payment and checkout flows, and the simplest mechanism that gives each guarantee.
+summary: How concurrent requests break business flows, and the simplest mechanism that gives each guarantee.
 ---
-
-This topic is a **System Design and backend architecture** preparation. It looks at how each mechanism works internally, how it is implemented and when it is worth using.
 
 A REST API does not solve concurrency by itself. HTTP is stateless and every request runs on its own thread, so two requests can touch the same order, the same balance or the same stock **at the same time**, on one pod or across many. Concurrency problems are solved in the client, in the application, in the database or with distributed coordination mechanisms, never by REST itself.
 

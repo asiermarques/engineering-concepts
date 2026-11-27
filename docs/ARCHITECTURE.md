@@ -41,14 +41,15 @@ src/
     progress/              # repositorio de progreso en el navegador (pendiente)
     gamification/          # XP, niveles, rachas, logros, repaso espaciado (lógica pura, pendiente)
   i18n/ui.ts               # cadenas de interfaz por idioma y utilidades de idioma
-  pages/index.astro        # `/` sirve el tema en inglés
+  pages/index.astro        # `/` sirve la portada (tarjetas de temas) en inglés
   pages/[locale]/index.astro
+  pages/[locale]/topics/[topic].astro
   pages/[locale]/concepts/[id].astro
 tests/e2e/                 # Playwright
 scripts/serve-dist.mjs     # servidor estático de dist/ para e2e
 ```
 
-Las URLs son `/` (inglés), `/<locale>/` (tema) y `/<locale>/concepts/<id>/`, donde `<id>` es el id estable del concepto, igual en todos los idiomas.
+Las URLs son `/` (portada en inglés), `/<locale>/` (portada: una tarjeta por tema), `/<locale>/topics/<tema>/` (presentación y mapa del tema) y `/<locale>/concepts/<id>/`, donde `<tema>` e `<id>` son ids estables, iguales en todos los idiomas. Se construyen con `src/features/concept-reading/paths.ts`.
 
 ## Modelo de contenido
 
@@ -86,5 +87,6 @@ Las URLs son `/` (inglés), `/<locale>/` (tema) y `/<locale>/concepts/<id>/`, do
 
 - Sin servidor ni funciones serverless; nada de secretos en el cliente.
 - Sin scripts de analítica o tracking de terceros.
+  - Excepción aceptada de forma provisional: en el plan gratuito, Netlify inyecta en cada página su script `/.netlify/scripts/hud` (badge y barra de herramientas del propietario), que no se puede desactivar. No forma parte del código del sitio. Revisar si se cambia de plan o de proveedor.
 - Accesibilidad: los retos y simuladores deben poder usarse con teclado y tener texto alternativo para lo visual.
 - Rendimiento: las páginas de lectura deben funcionar sin JavaScript; solo los retos y simuladores lo necesitan.

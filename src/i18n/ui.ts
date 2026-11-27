@@ -20,6 +20,8 @@ export interface AssessmentLabels {
   yourAnswer: string;
   result: string;
   repeat: string;
+  answered: string;
+  question: string;
 }
 
 export interface UiStrings {
@@ -35,6 +37,18 @@ export interface UiStrings {
   next: string;
   backToTopic: string;
   startReading: string;
+  topicLabel: string;
+  conceptsUnit: string;
+  start: string;
+  conceptLabel: string;
+  conceptOf: string;
+  homeHeading: string;
+  homeSummary: string;
+  topicsLabel: string;
+  topicUnit: string;
+  topicsUnit: string;
+  enterTopic: string;
+  allTopics: string;
   assessment: AssessmentLabels;
 }
 
@@ -52,6 +66,18 @@ export const ui: Record<Locale, UiStrings> = {
     next: 'Next',
     backToTopic: 'All concepts',
     startReading: 'Read concept',
+    topicLabel: 'Topic',
+    conceptsUnit: 'concepts',
+    start: 'Start',
+    conceptLabel: 'Concept',
+    conceptOf: 'of',
+    homeHeading: 'Choose a topic',
+    homeSummary: 'Each topic is an ordered path of concepts: how each mechanism works inside, how to implement it and when it is worth using. Every concept ends with an assessment.',
+    topicsLabel: 'Topics',
+    topicUnit: 'topic',
+    topicsUnit: 'topics',
+    enterTopic: 'Enter',
+    allTopics: 'All topics',
     assessment: {
       heading: 'Assessment',
       needsJavascript: 'The assessment needs JavaScript. Enable it to answer the questions.',
@@ -65,6 +91,8 @@ export const ui: Record<Locale, UiStrings> = {
       yourAnswer: 'Your answer',
       result: 'Result',
       repeat: 'Repeat assessment',
+      answered: 'Answered',
+      question: 'Question',
     },
   },
   es: {
@@ -80,6 +108,18 @@ export const ui: Record<Locale, UiStrings> = {
     next: 'Siguiente',
     backToTopic: 'Todos los conceptos',
     startReading: 'Leer concepto',
+    topicLabel: 'Tema',
+    conceptsUnit: 'conceptos',
+    start: 'Empezar',
+    conceptLabel: 'Concepto',
+    conceptOf: 'de',
+    homeHeading: 'Elige un tema',
+    homeSummary: 'Cada tema es un recorrido ordenado de conceptos: cómo funciona cada mecanismo por dentro, cómo se implementa y cuándo conviene usarlo. Cada concepto termina con una evaluación.',
+    topicsLabel: 'Temas',
+    topicUnit: 'tema',
+    topicsUnit: 'temas',
+    enterTopic: 'Entrar',
+    allTopics: 'Todos los temas',
     assessment: {
       heading: 'Evaluación',
       needsJavascript: 'La evaluación necesita JavaScript. Actívalo para responder las preguntas.',
@@ -93,6 +133,8 @@ export const ui: Record<Locale, UiStrings> = {
       yourAnswer: 'Tu respuesta',
       result: 'Resultado',
       repeat: 'Repetir evaluación',
+      answered: 'Respondidas',
+      question: 'Pregunta',
     },
   },
 };

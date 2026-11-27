@@ -1,0 +1,56 @@
+---
+import { entryLocale, loadContent } from '../content-validation/loadContent';
+import { ui, type Locale } from '../../i18n/ui';
+import Layout from './Layout.astro';
+import { topicPath } from './paths';
+
+interface Props {
+  locale: Locale;
+  /** Where the English page lives: `/` serves English too (FR-010). */
+  alternates: Record<Locale, string>;
+}
+const { locale, alternates } = Astro.props;
+const t = ui[locale];
+
+const content = await loadContent();
+const concepts = content.concepts.filter((c) => entryLocale(c.id) === locale);
+// Topic ids are shared across locales, so sorting by id keeps the same order in every language.
+const topics = content.topics
+  .filter((topic) => entryLocale(topic.id) === locale)
+  .sort((a, b) => a.data.id.localeCompare(b.data.id))
+  .map((topic) => ({ ...topic.data, conceptCount: concepts.filter((c) => c.data.topic === topic.data.id).length }));
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<Layout locale={locale} title={t.homeHeading} description={t.homeSummary} alternates={alternates} width="wide">
+  <section class="hero hero--home">
+    <p class="kicker">
+      <span class="kicker__chip">{t.topicsLabel}</span>
+      <span>{topics.length} {topics.length === 1 ? t.topicUnit : t.topicsUnit}</span>
+    </p>
+    <h1>{t.homeHeading}</h1>
+    <p class="hero__summary">{t.homeSummary}</p>
+  </section>
+
+  <ul class="topic-grid" data-testid="topic-list">
+    {
+      topics.map((topic, index) => (
+        <li class="topic-card" style={`--i:${index}`}>
+          <p class="topic-card__meta">
+            <span class="topic-card__slot" aria-hidden="true">{pad(index + 1)}</span>
+            <span>
+              <span class="topic-card__count">{topic.conceptCount}</span> {t.conceptsUnit}
+            </span>
+          </p>
+          <h2 class="topic-card__title">
+            <a class="topic-card__link" href={topicPath(locale, topic.id)}>{topic.title}</a>
+          </h2>
+          <p class="topic-card__summary">{topic.summary}</p>
+          <span class="topic-card__cta" aria-hidden="true">
+            {t.enterTopic} <span class="topic-card__glyph">▶</span>
+          </span>
+        </li>
+      ))
+    }
+  </ul>
+</Layout>

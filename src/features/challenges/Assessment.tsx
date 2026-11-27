@@ -1,4 +1,4 @@
-import { useReducer, type ReactNode } from 'react';
+import { useReducer, type CSSProperties, type ReactNode } from 'react';
 import type { AssessmentLabels } from '../../i18n/ui';
 import { initialState, reduce, summary, type QuestionState } from './assessmentState';
 import { gradeAnswer, isMultiSelect } from './grading';
@@ -21,7 +21,7 @@ export function Assessment({ challenges, labels, headingId }: Props) {
     undefined,
     initialState,
   );
-  const { result } = summary(challenges, state);
+  const { result, answered, total } = summary(challenges, state);
 
   const repeat = () => {
     dispatch({ type: 'reset' });
@@ -29,12 +29,26 @@ export function Assessment({ challenges, labels, headingId }: Props) {
   };
 
   return (
-    <div className="assessment">
+    <div className={`assessment${result ? ' assessment--done' : ''}`}>
+      <div className="meter">
+        <p className="meter__text">
+          {labels.answered}: <strong>{answered}/{total}</strong>
+        </p>
+        <ol className="meter__track" aria-hidden="true">
+          {challenges.map((challenge) => {
+            const q = state[challenge.id];
+            const kind = q?.submitted ? (gradeAnswer(challenge, q.selected).correct ? 'ok' : 'bad') : 'pending';
+            return <li key={challenge.id} className={`meter__cell meter__cell--${kind}`} />;
+          })}
+        </ol>
+      </div>
       <ol className="assessment__questions">
-        {challenges.map((challenge) => (
+        {challenges.map((challenge, index) => (
           <li key={challenge.id}>
             <Question
               challenge={challenge}
+              number={index + 1}
+              total={total}
               question={state[challenge.id] ?? { selected: [], submitted: false }}
               labels={labels}
               onChoose={(optionId) => dispatch({ type: 'choose', challengeId: challenge.id, optionId })}
@@ -44,20 +58,33 @@ export function Assessment({ challenges, labels, headingId }: Props) {
           </li>
         ))}
       </ol>
-      <div className="assessment__result" role="status" aria-live="polite">
-        {result && <p className="assessment__result-text">{`${labels.result}: ${result.correct}/${result.total}`}</p>}
+      <div className={result ? 'result result--visible' : 'result'}>
+        <div className="assessment__result" role="status" aria-live="polite">
+          {result && (
+            <p className="assessment__result-text">{`${labels.result}: ${result.correct}/${result.total}`}</p>
+          )}
+        </div>
+        {result && (
+          <>
+            <ol className="result__stars" aria-hidden="true">
+              {Array.from({ length: result.total }, (_, i) => (
+                <li key={i} className={i < result.correct ? 'result__star result__star--on' : 'result__star'} style={{ '--i': i } as CSSProperties} />
+              ))}
+            </ol>
+            <button type="button" className="button" onClick={repeat}>
+              <span aria-hidden="true" className="button__glyph">↻</span> {labels.repeat}
+            </button>
+          </>
+        )}
       </div>
-      {result && (
-        <button type="button" className="button" onClick={repeat}>
-          {labels.repeat}
-        </button>
-      )}
     </div>
   );
 }
 
 interface QuestionProps {
   challenge: MultipleChoiceChallenge;
+  number: number;
+  total: number;
   question: QuestionState;
   labels: AssessmentLabels;
   onChoose: (optionId: string) => void;
@@ -65,24 +92,34 @@ interface QuestionProps {
   onConfirm: () => void;
 }
 
-function Question({ challenge, question, labels, onChoose, onToggle, onConfirm }: QuestionProps) {
+function Question({ challenge, number, total, question, labels, onChoose, onToggle, onConfirm }: QuestionProps) {
   const multi = isMultiSelect(challenge);
   const { submitted, selected } = question;
   const grade = submitted ? gradeAnswer(challenge, selected) : null;
   const promptId = `${challenge.id}-prompt`;
 
   return (
-    <div role="group" aria-labelledby={promptId} className="question">
+    <div
+      role="group"
+      aria-labelledby={promptId}
+      className={`question${submitted ? (grade?.correct ? ' question--ok' : ' question--bad') : ''}`}
+    >
+      <p className="question__tag" aria-hidden="true">
+        <span>{labels.question}</span> {number}/{total}
+      </p>
       <p id={promptId} className="question__prompt">
         <Inline text={challenge.prompt} />
       </p>
       {multi && !submitted && <p className="question__hint">{labels.selectAll}</p>}
       <ul className="question__options">
-        {challenge.options.map((option) => {
+        {challenge.options.map((option, index) => {
           const isSelected = selected.includes(option.id);
           const status = submitted ? optionStatus(option.correct, isSelected, multi, labels) : null;
+          const classes = ['option', isSelected && 'option--selected', status && `option--${status.kind}`, submitted && !status && 'option--neutral']
+            .filter(Boolean)
+            .join(' ');
           return (
-            <li key={option.id} className={`option${isSelected ? ' option--selected' : ''}`}>
+            <li key={option.id} className={classes}>
               {multi ? (
                 <label className="option__control">
                   <input
@@ -91,7 +128,7 @@ function Question({ challenge, question, labels, onChoose, onToggle, onConfirm }
                     disabled={submitted}
                     onChange={() => onToggle(option.id)}
                   />
-                  <span><Inline text={option.text} /></span>
+                  <span className="option__text"><Inline text={option.text} /></span>
                 </label>
               ) : (
                 <button
@@ -100,7 +137,8 @@ function Question({ challenge, question, labels, onChoose, onToggle, onConfirm }
                   disabled={submitted}
                   onClick={() => onChoose(option.id)}
                 >
-                  <Inline text={option.text} />
+                  <span className="option__key" aria-hidden="true">{String.fromCharCode(65 + index)}</span>
+                  <span className="option__text"><Inline text={option.text} /></span>
                 </button>
               )}
               {submitted && (
