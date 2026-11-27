@@ -1,9 +1,14 @@
 # Engineering Concepts
 
-## Flujo de trabajo: trunk-based
+## Language
 
-- Trabaja y haz commit **directamente sobre `main`**. No crees ramas de funcionalidad ni pull requests.
-- Commits pequeños; cada uno debe dejar `main` desplegable (Netlify publica cada push a `main` en producción).
-- Ejecuta `npm run verify` antes de hacer push.
+- Write all docs, instructions, code, comments and commit messages in **English**.
+- Site content and UI strings exist in both locales (`en`, `es`); only those are written in Spanish.
 
-Contexto del producto y la arquitectura: `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`.
+## Workflow: trunk-based
+
+- Work and commit **directly on `main`**. Do not create feature branches or pull requests.
+- Keep commits small; each one must leave `main` deployable (Netlify deploys every push to `main` to production).
+- Run `npm run verify` before pushing.
+
+Product and architecture context: `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`. Terms: `docs/UBIQUITOUS_LANGUAGE.md`.

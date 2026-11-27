@@ -1,17 +1,17 @@
 # Engineering Concepts
 
-Sitio estático (Astro + islas React) para leer conceptos de ingeniería y comprobar su comprensión con retos. Ver `docs/PRODUCT.md` y `docs/ARCHITECTURE.md`.
+Static site (Astro + React islands) for reading engineering concepts and checking understanding with challenges. See `docs/PRODUCT.md` and `docs/ARCHITECTURE.md`.
 
 ```bash
 npm install
-npm run dev          # desarrollo
-npm run build        # build + validación de contenido (falla si falta una traducción o hay < 3 retos por concepto)
-npm test             # tests unitarios y de componentes (Vitest)
-npx playwright install chromium   # una vez
-npm run test:e2e     # e2e (construye dist/ y lo sirve)
-npm run verify       # tests + build: ejecutar antes de cada push
+npm run dev          # development server
+npm run build        # build + content validation (fails if a translation is missing or a concept has < 3 challenges)
+npm test             # unit and component tests (Vitest)
+npx playwright install chromium   # once
+npm run test:e2e     # e2e (builds dist/ and serves it)
+npm run verify       # tests + build: run before every push
 ```
 
-Flujo trunk-based: se trabaja y se hace push directamente a `main` (sin ramas ni PRs); cada push despliega a producción en Netlify. Ver `docs/ARCHITECTURE.md`.
+Trunk-based workflow: work and push directly to `main` (no branches or PRs); every push deploys to production on Netlify. See `docs/ARCHITECTURE.md`.
 
-Añadir un concepto: crear `src/content/concepts/{en,es}/<tema>/<id>.mdx` y `src/content/challenges/{en,es}/<id>.yaml` (mismos ids de concepto, reto y opción en ambos idiomas).
+Adding a concept: create `src/content/concepts/{en,es}/<topic>/<id>.mdx` and `src/content/challenges/{en,es}/<id>.yaml` (same concept, challenge and option ids in both locales).

@@ -1,79 +1,79 @@
-# Producto: Engineering Concepts
+# Product: Engineering Concepts
 
-## Visión
+## Vision
 
-Un sitio web público para **leer, practicar y demostrar que se han entendido conceptos de ingeniería de software**, empezando por la preparación de entrevistas de **System Design y arquitectura backend**. Cada concepto explica cómo funciona el mecanismo por dentro, cómo se implementa y cuándo conviene usarlo, y termina con retos que obligan a aplicarlo.
+A public website for **reading, practising and proving understanding of software engineering concepts**, starting with interview preparation for **System Design and backend architecture**. Each concept explains how the mechanism works inside, how it is implemented and when to use it, and ends with challenges that require applying it.
 
-El sitio funciona como un **juego de aprendizaje**: el progreso, la experiencia (XP), los niveles, las rachas y los logros motivan a volver y a repasar lo que se ha fallado.
+The site works as a **learning game**: progress, experience points (XP), levels, streaks and achievements motivate learners to come back and review what they got wrong.
 
-## Usuario objetivo
+## Target user
 
-- Ingenieros/as backend que preparan entrevistas técnicas de System Design o quieren profundizar en mecanismos de concurrencia, consistencia y resiliencia.
-- Perfil de referencia del primer contenido: experiencia en pagos, checkout y sistemas distribuidos, con ejemplos en Java, Kotlin y SQL.
-- Uso **anónimo**: no hay cuentas ni login. Cualquiera puede entrar y usarlo.
+- Backend engineers preparing for System Design interviews, or who want to go deeper into concurrency, consistency and resilience mechanisms.
+- Reference profile for the first content: experience in payments, checkout and distributed systems, with examples in Java, Kotlin and SQL.
+- **Anonymous** use: no accounts or login. Anyone can visit and use it.
 
-## Propuesta de valor
+## Value proposition
 
-- Explicaciones con profundidad de entrevista senior, no definiciones de glosario: casos que fallan, por qué fallan y la solución más sencilla que da las garantías necesarias.
-- Retos variados que comprueban la comprensión de verdad, no la memoria.
-- Simuladores interactivos que hacen visible lo que pasa en el tiempo (intercalación de peticiones, tokens, permisos, latencias).
-- Un catálogo que crece: se añaden conceptos, retos y preguntas sin rediseñar el sitio.
+- Explanations at senior-interview depth, not glossary definitions: cases that fail, why they fail, and the simplest solution that gives the required guarantees.
+- Varied challenges that test real understanding, not memory.
+- Interactive simulators that make visible what happens over time (request interleaving, tokens, permits, latencies).
+- A growing catalogue: concepts, challenges and questions are added without redesigning the site.
 
-## Estado actual
+## Current state
 
-Implementado (requisito 001): el tema *Concurrencia y consistencia en backend* con sus 13 conceptos en español e inglés, cada uno con su **Evaluación** de preguntas de opción múltiple (una o varias respuestas correctas, explicación por opción, **Resultado** y repetición) y **Versión estática** de las secuencias de simulador. Sin progreso, XP ni persistencia: recargar o cambiar de idioma reinicia la Evaluación. El contenido está redactado por Claude a partir del material original (secciones 1–15) y **pendiente de revisión técnica por el Autor**.
+Implemented (requirement 001): the topic *Concurrency and consistency in backend* with its 13 concepts in Spanish and English, each with its **Assessment** of multiple-choice questions (one or several correct answers, explanation per option, **Result** and retry) and a **Static walkthrough** of the simulator sequences. No progress, XP or persistence: reloading or switching locale resets the Assessment. The content was written by Claude from the original material (sections 1–15) and is **pending technical review by the Author**.
 
-## Alcance del producto
+## Product scope
 
-### Contenido
+### Content
 
-- **Concepto**: unidad de lectura (p. ej. *Optimistic locking*). Pertenece a un **tema** o ruta (p. ej. *Concurrencia y consistencia en backend*).
-- Cada concepto tiene explicación, ejemplos de código y uno o varios **retos**.
-- Primer tema: concurrencia en backend y System Design (race conditions, atomicidad, locks locales, optimistic/pessimistic locking, idempotencia, distributed locking, aislamiento de transacciones y MVCC, deadlocks, fan-out/fan-in y structured concurrency, modelos de hilos, semáforos y connection pools, rate limiting y backpressure, timeouts/retries/circuit breakers/bulkheads, Saga/Outbox/Inbox).
-- Idiomas: **español e inglés** desde la primera versión. Los términos técnicos de uso habitual se mantienen en inglés en ambos idiomas.
+- **Concept**: the reading unit (e.g. *Optimistic locking*). It belongs to a **topic** (e.g. *Concurrency and consistency in backend*).
+- Each concept has an explanation, code examples and one or more **challenges**.
+- First topic: backend concurrency and System Design (race conditions, atomicity, local locks, optimistic/pessimistic locking, idempotency, distributed locking, transaction isolation and MVCC, deadlocks, fan-out/fan-in and structured concurrency, threading models, semaphores and connection pools, rate limiting and backpressure, timeouts/retries/circuit breakers/bulkheads, Saga/Outbox/Inbox).
+- Locales: **Spanish and English** from the first version. Commonly used technical terms stay in English in both locales.
 
-### Tipos de reto
+### Challenge types
 
-1. **Opción múltiple**: una o varias respuestas correctas, con explicación por opción.
-2. **Encontrar el bug**: fragmento Java/Kotlin/SQL donde hay que señalar la línea o el problema.
-3. **Ordenar / escenario**: ordenar los pasos de una intercalación o elegir el mecanismo adecuado para un caso de negocio.
-4. **Simulador interactivo**: manipular un modelo (optimistic locking paso a paso, token bucket, semáforo, latencia secuencial frente a concurrente…) y responder sobre lo observado.
+1. **Multiple choice**: one or several correct answers, with an explanation per option.
+2. **Find the bug**: a Java/Kotlin/SQL snippet where the learner points out the line or the problem.
+3. **Ordering / scenario**: order the steps of an interleaving, or choose the right mechanism for a business case.
+4. **Interactive simulator**: manipulate a model (step-by-step optimistic locking, token bucket, semaphore, sequential vs. concurrent latency…) and answer questions about what was observed.
 
-### Mecánica de juego (visión completa)
+### Game mechanics (full vision)
 
-- XP por retos superados y niveles.
-- Estado por concepto (no empezado / en progreso / dominado).
-- Rachas diarias.
-- Logros.
-- Repaso espaciado de las preguntas falladas.
-- Simuladores interactivos integrados en la lectura y en los retos.
+- XP for passed challenges, and levels.
+- Status per concept (not started / in progress / mastered).
+- Daily streaks.
+- Achievements.
+- Spaced review of failed questions.
+- Interactive simulators embedded in the reading and in challenges.
 
-La visión es el juego completo; cada funcionalidad se define y prioriza en su propio documento de requisitos (`.workflow/requisites/`).
+The vision is the full game; each feature is defined and prioritised in its own requirements document (`.workflow/requisites/`).
 
-### Progreso
+### Progress
 
-- Se guarda **solo en el navegador** de cada persona. No hay sincronización entre dispositivos.
-- El sitio debe seguir funcionando aunque el almacenamiento del navegador no esté disponible (modo privado, datos borrados): se puede leer y responder, pero no se conserva el progreso.
+- Stored **only in each learner's browser**. No sync between devices.
+- The site must keep working when browser storage is unavailable (private mode, cleared data): learners can read and answer, but progress is not kept.
 
-## Fuera de alcance (non-goals)
+## Non-goals
 
-- Cuentas de usuario, login o perfiles.
-- Backend propio o base de datos en servidor.
-- Rankings o comparación entre personas (no hay identidad compartida).
-- Panel de administración: el contenido se edita como ficheros en el repositorio.
-- Generar preguntas con IA en tiempo de ejecución.
-- Ejecutar código real del usuario (los retos de código se evalúan con respuestas predefinidas).
+- User accounts, login or profiles.
+- Own backend or server-side database.
+- Leaderboards or comparison between people (there is no shared identity).
+- Admin panel: content is edited as files in the repository.
+- Generating questions with AI at runtime.
+- Running the learner's real code (code challenges are graded against predefined answers).
 
-## Principios de producto
+## Product principles
 
-- **Precisión técnica por encima de simplificación**: matizar cuando una garantía depende del motor, del aislamiento o del despliegue.
-- **El mecanismo más sencillo que da las garantías necesarias**: el contenido debe enseñar a elegir, no solo a enumerar.
-- **Contenido como código**: añadir un concepto o un reto no debería requerir tocar la lógica del sitio.
-- **Privacidad por defecto**: sin tracking de terceros ni datos personales.
+- **Technical accuracy over simplification**: qualify claims when a guarantee depends on the engine, the isolation level or the deployment.
+- **The simplest mechanism that gives the required guarantees**: content should teach how to choose, not just enumerate.
+- **Content as code**: adding a concept or a challenge should not require touching the site's logic.
+- **Privacy by default**: no third-party tracking or personal data.
 
-## Preguntas de producto abiertas
+## Open product questions
 
-- ¿Los conceptos se **desbloquean** en orden al superar retos, o todo el contenido es accesible desde el principio y la progresión solo es informativa? (Al ser un sitio público, bloquear la lectura puede frustrar a quien llega buscando un concepto concreto.)
-- Fórmula de XP y niveles, y qué cuenta como concepto *dominado*.
-- Algoritmo de repaso espaciado (p. ej. cajas de Leitner o SM-2).
-- ¿Exportar e importar el progreso (fichero JSON) para mitigar la falta de sincronización?
+- Are concepts **unlocked** in order by passing challenges, or is all content accessible from the start with progression being informational only? (As a public site, locking the reading may frustrate someone who arrives looking for a specific concept.)
+- XP and level formula, and what counts as a *mastered* concept.
+- Spaced review algorithm (e.g. Leitner boxes or SM-2).
+- Export and import progress (JSON file) to mitigate the lack of sync?

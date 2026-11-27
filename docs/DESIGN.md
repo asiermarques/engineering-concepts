@@ -1,42 +1,42 @@
-# Diseño
+# Design
 
-Dirección: **"level select" de consola retro**. La lectura va primero: tipografía hiperlegible, columna de lectura tranquila y alto contraste. La sensación de juego vive en el *chrome*: tipografía pixel en títulos, sombras duras desplazadas, contadores tipo HUD, teclas A/B/C y un mapa de conceptos.
+Direction: **retro console "level select"**. Reading comes first: hyperlegible typography, a calm reading column and high contrast. The game feel lives in the *chrome*: pixel type in headings, hard offset shadows, HUD-style counters, A/B/C keys and a concept map.
 
-Todo está en `src/styles/global.css`, con tokens en `:root` (tema claro "cartucho") y `prefers-color-scheme: dark` (tema "consola nocturna").
+Everything is in `src/styles/global.css`, with tokens on `:root` (light "cartridge" theme) and `prefers-color-scheme: dark` ("night console" theme).
 
-## Tipografía
+## Typography
 
-Fuentes autoalojadas con `@fontsource-variable/*` (sin Google Fonts, por la regla de privacidad de PRODUCT.md).
+Self-hosted fonts via `@fontsource-variable/*` (no Google Fonts, per the privacy rule in PRODUCT.md).
 
-| Token | Fuente | Uso |
+| Token | Font | Use |
 | --- | --- | --- |
-| `--font-body` | Atkinson Hyperlegible Next | Texto, enunciados, explicaciones, etiquetas pequeñas en mayúsculas |
-| `--font-mono` | Atkinson Hyperlegible Mono | Código, **todos los números** (Concepto 04/13, Resultado, pasos de la Versión estática) y teclas A/B/C |
-| `--font-display` | Pixelify Sans | Solo `h1`/`h2`, botones, logo y selector de idioma, **siempre en mayúsculas y minúsculas** |
+| `--font-body` | Atkinson Hyperlegible Next | Body text, question prompts, explanations, small uppercase labels |
+| `--font-mono` | Atkinson Hyperlegible Mono | Code, **all numbers** (Concept 04/13, Result, Static walkthrough steps) and A/B/C keys |
+| `--font-display` | Pixelify Sans | Only `h1`/`h2`, buttons, logo and locale switcher, **always in mixed case** |
 
-Regla: Pixelify Sans no se usa para cifras, letras sueltas ni texto en mayúsculas: ahí `B`/`8`, `C`/`O`, `2`/`8` y `5`/`S` se confunden.
+Rule: Pixelify Sans is not used for digits, single letters or uppercase text: there `B`/`8`, `C`/`O`, `2`/`8` and `5`/`S` get confused.
 
 ## Color
 
-- `--color-accent` (amarillo moneda): acción principal, concepto actual, Resultado. Texto encima con `--color-on-accent`; como color de texto sobre fondo usar `--color-accent-ink`.
-- `--color-link` / `--color-focus`: enlaces y foco (contorno de 3 px).
-- `--color-ok`, `--color-bad`, `--color-warn` (+ `-bg`): correcta, incorrecta, opción correcta no seleccionada. Siempre acompañados de icono y texto, nunca solo color.
-- `--color-screen` / `--color-on-screen`: panel oscuro del Resultado en ambos temas.
+- `--color-accent` (coin yellow): primary action, current concept, Result. Text on top uses `--color-on-accent`; as a text color on the background use `--color-accent-ink`.
+- `--color-link` / `--color-focus`: links and focus (3 px outline).
+- `--color-ok`, `--color-bad`, `--color-warn` (+ `-bg`): correct, incorrect, correct option not selected. Always paired with an icon and text, never color alone.
+- `--color-screen` / `--color-on-screen`: dark Result panel in both themes.
 
-## Componentes
+## Components
 
-- **Paneles**: borde de 2 px y `--shadow-hard` (desplazamiento de `--px`, sin desenfoque). Esquinas rectas.
-- **Botones**: amarillos con sombra dura; al pulsar se "hunden" (`translate` + sombra 0).
-- **Tarjetas de tema** (`.topic-card`): portada con un "cartucho" por tema (franja amarilla, número de ranura en mono, nº de conceptos); toda la tarjeta es el enlace.
-- **Mapa del tema** (`.stage-map`): conceptos numerados sobre un raíl punteado; toda la tarjeta es el enlace.
-- **HUD del concepto** (`.hud`): posición `04/13` y una barra de segmentos que indica la posición, no el progreso.
-- **Evaluación**: zona con trama diagonal; barra segmentada de respondidas (verde/rojo), etiqueta "Pregunta n/N", teclas A/B/C en preguntas de una respuesta y casillas pixel en las de varias; panel final con el Resultado y estrellas decorativas.
-- **Versión estática**: tabla tipo "repetición" con los pasos numerados en mono.
+- **Panels**: 2 px border and `--shadow-hard` (offset by `--px`, no blur). Square corners.
+- **Buttons**: yellow with a hard shadow; when pressed they "sink" (`translate` + zero shadow).
+- **Topic cards** (`.topic-card`): home page with one "cartridge" per topic (yellow stripe, slot number in mono, number of concepts); the whole card is the link.
+- **Topic map** (`.stage-map`): numbered concepts on a dotted rail; the whole card is the link.
+- **Concept HUD** (`.hud`): position `04/13` and a segmented bar showing position, not progress.
+- **Assessment**: area with a diagonal hatch; segmented bar of answered questions (green/red), "Question n/N" label, A/B/C keys for single-answer questions and pixel checkboxes for multi-answer ones; final panel with the Result and decorative stars.
+- **Static walkthrough**: "replay"-style table with steps numbered in mono.
 
-## Movimiento
+## Motion
 
-Entradas escalonadas en la portada y el mapa, sello (`stamp`) en el veredicto y el Resultado, sacudida en la opción incorrecta. Todo se desactiva con `prefers-reduced-motion`.
+Staggered entrances on the home page and the map, a `stamp` on the verdict and the Result, a shake on the incorrect option. All disabled under `prefers-reduced-motion`.
 
-## Pendiente para la gamificación
+## Pending for gamification
 
-XP, niveles, rachas y logros deben reutilizar estos patrones: cifras en `--font-mono`, recompensas en `--color-accent` y paneles con sombra dura. El Estado del concepto puede pintarse en el número del mapa (`.stage__num`) y en los segmentos del HUD.
+XP, levels, streaks and achievements should reuse these patterns: numbers in `--font-mono`, rewards in `--color-accent` and hard-shadow panels. Concept status can be painted on the map number (`.stage__num`) and on the HUD segments.

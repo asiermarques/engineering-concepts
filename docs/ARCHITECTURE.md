@@ -1,102 +1,102 @@
-# Arquitectura
+# Architecture
 
-## Resumen
+## Overview
 
-Sitio **estático** generado con **Astro** y desplegado en **Netlify**. El contenido (conceptos y retos) vive como ficheros en el repositorio y se valida en tiempo de build. La interactividad (retos, simuladores, progreso, gamificación) se implementa como **islas React** que se hidratan solo donde hacen falta. **No hay backend**: todo el estado de la persona se guarda en su navegador.
+A **static** site generated with **Astro** and deployed on **Netlify**. Content (concepts and challenges) lives as files in the repository and is validated at build time. Interactivity (challenges, simulators, progress, gamification) is implemented as **React islands** that hydrate only where needed. **There is no backend**: all of the learner's state is stored in their browser.
 
 ```
-repo (MDX/YAML)  ──build──▶  HTML estático + islas React  ──▶  Netlify CDN
+repo (MDX/YAML)  ──build──▶  static HTML + React islands  ──▶  Netlify CDN
                                                      │
                                                      ▼
-                                     navegador: almacenamiento local (progreso)
+                                     browser: local storage (progress)
 ```
 
-## Decisiones principales
+## Key decisions
 
-| Decisión | Elección | Motivo |
+| Decision | Choice | Reason |
 | --- | --- | --- |
-| Framework | Astro + `@astrojs/react` + `@astrojs/mdx` | Sitio de contenido con poco JS; islas solo para lo interactivo; SEO para un sitio público. |
-| Lenguaje | TypeScript estricto | Esquemas de contenido y de progreso tipados. |
-| Contenido | Content collections de Astro (loader `glob`) con esquemas Zod | Añadir contenido = añadir ficheros; el build falla si un concepto o reto está mal formado. |
-| Estado de la persona | Almacenamiento del navegador | Sin cuentas ni backend (ver PRODUCT.md). |
-| i18n | Rutas por idioma (`/es/…`, `/en/…`) con el i18n de Astro | Español e inglés desde la primera versión. |
-| Hosting | Netlify, despliegue de producción en cada push a `main` | Gratis para este uso; sin previews por rama (ver Flujo de trabajo). |
-| Flujo de trabajo | Trunk-based: commits pequeños directamente sobre `main` | Integración continua real, sin ramas de larga vida ni merges. |
+| Framework | Astro + `@astrojs/react` + `@astrojs/mdx` | Content site with little JS; islands only for interactive parts; SEO for a public site. |
+| Language | Strict TypeScript | Typed content and progress schemas. |
+| Content | Astro content collections (`glob` loader) with Zod schemas | Adding content = adding files; the build fails if a concept or challenge is malformed. |
+| Learner state | Browser storage | No accounts or backend (see PRODUCT.md). |
+| i18n | Per-locale routes (`/es/…`, `/en/…`) with Astro's i18n | Spanish and English from the first version. |
+| Hosting | Netlify, production deploy on every push to `main` | Free for this usage; no per-branch previews (see Workflow). |
+| Workflow | Trunk-based: small commits directly on `main` | Real continuous integration, no long-lived branches or merges. |
 
-## Organización del código
+## Code organisation
 
-Estructura orientada a funcionalidades (vertical slices): cada funcionalidad agrupa sus componentes, lógica y tests.
+Feature-oriented structure (vertical slices): each feature groups its components, logic and tests.
 
 ```
 src/
-  content.config.ts        # definición de colecciones y esquemas Zod
+  content.config.ts        # collection definitions and Zod schemas
   content/
-    topics/<locale>/<topic>.md                  # presentación del tema
+    topics/<locale>/<topic>.md                  # topic introduction
     concepts/<locale>/<topic>/<concept>.mdx
     challenges/<locale>/<concept>.yaml          # { concept, challenges: [...] }
   features/
-    concept-reading/       # layout, páginas del tema/concepto, navegación anterior/siguiente, esquema de concepto
-    challenges/            # esquema, corrección, estado y UI (isla React) de la Evaluación
-    content-validation/    # reglas entre ficheros (traducciones, mínimo de retos) y carga validada
-    simulators/            # Versión estática (StaticWalkthrough.astro); simuladores React en el futuro
-    progress/              # repositorio de progreso en el navegador (pendiente)
-    gamification/          # XP, niveles, rachas, logros, repaso espaciado (lógica pura, pendiente)
-  i18n/ui.ts               # cadenas de interfaz por idioma y utilidades de idioma
-  pages/index.astro        # `/` sirve la portada (tarjetas de temas) en inglés
+    concept-reading/       # layout, topic/concept pages, previous/next navigation, concept schema
+    challenges/            # schema, grading, state and UI (React island) of the Assessment
+    content-validation/    # cross-file rules (translations, minimum challenges) and validated loading
+    simulators/            # Static walkthrough (StaticWalkthrough.astro); React simulators in the future
+    progress/              # in-browser progress repository (pending)
+    gamification/          # XP, levels, streaks, achievements, spaced review (pure logic, pending)
+  i18n/ui.ts               # UI strings per locale and locale utilities
+  pages/index.astro        # `/` serves the home page (topic cards) in English
   pages/[locale]/index.astro
   pages/[locale]/topics/[topic].astro
   pages/[locale]/concepts/[id].astro
 tests/e2e/                 # Playwright
-scripts/serve-dist.mjs     # servidor estático de dist/ para e2e
+scripts/serve-dist.mjs     # static server for dist/ used by e2e
 ```
 
-Las URLs son `/` (portada en inglés), `/<locale>/` (portada: una tarjeta por tema), `/<locale>/topics/<tema>/` (presentación y mapa del tema) y `/<locale>/concepts/<id>/`, donde `<tema>` e `<id>` son ids estables, iguales en todos los idiomas. Se construyen con `src/features/concept-reading/paths.ts`.
+URLs are `/` (English home page), `/<locale>/` (home page: one card per topic), `/<locale>/topics/<topic>/` (topic introduction and map) and `/<locale>/concepts/<id>/`, where `<topic>` and `<id>` are stable ids, identical in every locale. They are built with `src/features/concept-reading/paths.ts`.
 
-## Modelo de contenido
+## Content model
 
-- **Tema** → lista ordenada de **conceptos**.
-- **Concepto**: MDX con frontmatter (id estable, título, tema, orden, nivel de dificultad, conceptos previos, resumen). Puede embeber simuladores como componentes.
-- **Reto**: datos (YAML o frontmatter) con un id estable, el concepto al que pertenece, el tipo y los datos propios de su tipo; incluye siempre una explicación de la respuesta.
-- Los ids de concepto y de reto son **estables e iguales en todos los idiomas**: el progreso se guarda por id y no debe romperse al editar textos ni al cambiar de idioma.
-- Un concepto, reto o tema sin traducción **rompe el build** (requisito 001, BR-001).
-- Los retos de un concepto viven en un único fichero `challenges/<locale>/<concept>.yaml`, con un esquema discriminado por `type` (hoy solo `multiple-choice`). Que una pregunta admita varias opciones se deduce del número de opciones correctas.
-- Cada opción lleva un id estable igual en todos los idiomas; así el build comprueba que la opción correcta coincide entre idiomas.
+- **Topic** → ordered list of **concepts**.
+- **Concept**: MDX with frontmatter (stable id, title, topic, order, difficulty level, prerequisite concepts, summary). It can embed simulators as components.
+- **Challenge**: data (YAML or frontmatter) with a stable id, the concept it belongs to, the type and its type-specific data; it always includes an explanation of the answer.
+- Concept and challenge ids are **stable and identical in every locale**: progress is stored by id and must not break when editing text or switching locale.
+- A concept, challenge or topic without a translation **breaks the build** (requirement 001, BR-001).
+- A concept's challenges live in a single file `challenges/<locale>/<concept>.yaml`, with a schema discriminated by `type` (today only `multiple-choice`). Whether a question accepts several options is inferred from the number of correct options.
+- Each option has a stable id identical in every locale, so the build checks that the correct option matches across locales.
 
-### Validación en build
+### Build-time validation
 
-1. **Por fichero**: esquemas Zod de las colecciones (`objetivo de aprendizaje` obligatorio, al menos una opción correcta, explicación por opción…).
-2. **Entre ficheros**: `features/content-validation/validateContent.ts` (función pura) comprueba traducciones, mínimo de 3 retos por concepto, ids duplicados, referencias a conceptos inexistentes y coherencia de opciones entre idiomas. `loadContent.ts` la ejecuta desde las páginas y lanza un único error con **todas** las violaciones.
+1. **Per file**: Zod schemas of the collections (required `learning objective`, at least one correct option, explanation per option…).
+2. **Cross-file**: `features/content-validation/validateContent.ts` (pure function) checks translations, a minimum of 3 challenges per concept, duplicate ids, references to non-existent concepts and option consistency across locales. `loadContent.ts` runs it from the pages and throws a single error listing **all** violations.
 
-## Estado en el navegador
+## Browser state
 
-- Un único módulo (`features/progress`) encapsula la lectura y escritura; el resto del código no accede directamente al almacenamiento.
-- El estado guardado lleva un **número de versión del esquema** y migraciones, para poder evolucionar el modelo de gamificación sin perder el progreso existente.
-- Si el almacenamiento no está disponible o devuelve datos corruptos, la aplicación funciona con estado en memoria y no falla.
-- La lógica de gamificación (XP, niveles, rachas, repaso espaciado) son **funciones puras** sobre el estado, sin dependencias de React ni del navegador, para poder probarlas de forma aislada. Las fechas se inyectan, no se leen del reloj dentro de la lógica.
+- A single module (`features/progress`) encapsulates reads and writes; the rest of the code does not access storage directly.
+- Stored state carries a **schema version number** and migrations, so the gamification model can evolve without losing existing progress.
+- If storage is unavailable or returns corrupt data, the app works with in-memory state and does not fail.
+- Gamification logic (XP, levels, streaks, spaced review) consists of **pure functions** over the state, with no React or browser dependencies, so it can be tested in isolation. Dates are injected, not read from the clock inside the logic.
 
-## Calidad
+## Quality
 
-- Tests unitarios para la lógica pura (gamificación, evaluación de retos, migraciones de progreso).
-- Validación del contenido en build mediante los esquemas de las colecciones.
-- Tests end-to-end de los flujos principales (leer un concepto, completar un reto, conservar el progreso al recargar).
-- Herramientas: **Vitest** (lógica pura y componentes React con Testing Library + jsdom, ficheros `*.test.ts(x)` junto al código) y **Playwright** (`tests/e2e`, contra `dist/` servido por `scripts/serve-dist.mjs`, porque `astro preview` se desacopla a segundo plano y no se puede supervisar desde Playwright).
-- Comandos: `npm test`, `npm run test:e2e`, `npm run build`, `npm run verify` (tests + build, antes de cada push).
-- La **Evaluación** es una isla `client:only="react"`: sin JavaScript solo se muestra un aviso (`<noscript>`).
-- El estado de la Evaluación está solo en memoria (sin almacenamiento) hasta el requisito de progreso.
+- Unit tests for pure logic (gamification, challenge grading, progress migrations).
+- Content validation at build time through the collection schemas.
+- End-to-end tests of the main flows (reading a concept, completing a challenge, keeping progress after reload).
+- Tools: **Vitest** (pure logic and React components with Testing Library + jsdom, `*.test.ts(x)` files next to the code) and **Playwright** (`tests/e2e`, against `dist/` served by `scripts/serve-dist.mjs`, because `astro preview` detaches to the background and cannot be supervised by Playwright).
+- Commands: `npm test`, `npm run test:e2e`, `npm run build`, `npm run verify` (tests + build, before every push).
+- The **Assessment** is a `client:only="react"` island: without JavaScript only a notice is shown (`<noscript>`).
+- Assessment state is in memory only (no storage) until the progress requirement.
 
-## Flujo de trabajo (trunk-based)
+## Workflow (trunk-based)
 
-- Se trabaja **directamente sobre `main`**: sin ramas de funcionalidad ni pull requests.
-- Commits **pequeños y frecuentes**; cada commit deja `main` desplegable.
-- Antes de hacer push: `npm run verify` (tests unitarios + build con validación de contenido).
-- CI (`.github/workflows/ci.yml`) ejecuta lo mismo en cada push a `main`; si falla, arreglarlo es lo primero.
-- Netlify publica en producción cada push a `main`. El trabajo a medio hacer no se oculta en una rama: se sube en pasos que no rompen nada o se deja sin enlazar desde la navegación hasta que esté listo.
-- Para comprobar un despliegue: `E2E_BASE_URL=<url> npm run test:e2e`.
+- Work happens **directly on `main`**: no feature branches or pull requests.
+- **Small, frequent** commits; each commit leaves `main` deployable.
+- Before pushing: `npm run verify` (unit tests + build with content validation).
+- CI (`.github/workflows/ci.yml`) runs the same on every push to `main`; if it fails, fixing it comes first.
+- Netlify deploys every push to `main` to production. Unfinished work is not hidden in a branch: it is pushed in steps that don't break anything, or left unlinked from navigation until it is ready.
+- To check a deploy: `E2E_BASE_URL=<url> npm run test:e2e`.
 
-## Restricciones
+## Constraints
 
-- Sin servidor ni funciones serverless; nada de secretos en el cliente.
-- Sin scripts de analítica o tracking de terceros.
-  - Excepción aceptada de forma provisional: en el plan gratuito, Netlify inyecta en cada página su script `/.netlify/scripts/hud` (badge y barra de herramientas del propietario), que no se puede desactivar. No forma parte del código del sitio. Revisar si se cambia de plan o de proveedor.
-- Accesibilidad: los retos y simuladores deben poder usarse con teclado y tener texto alternativo para lo visual.
-- Rendimiento: las páginas de lectura deben funcionar sin JavaScript; solo los retos y simuladores lo necesitan.
+- No server or serverless functions; no secrets in the client.
+- No third-party analytics or tracking scripts.
+  - Provisionally accepted exception: on the free plan, Netlify injects its `/.netlify/scripts/hud` script into every page (owner badge and toolbar), which cannot be disabled. It is not part of the site's code. Revisit if the plan or provider changes.
+- Accessibility: challenges and simulators must be usable with a keyboard and have alternative text for visuals.
+- Performance: reading pages must work without JavaScript; only challenges and simulators need it.

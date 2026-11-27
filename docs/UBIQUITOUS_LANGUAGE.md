@@ -1,77 +1,77 @@
 # Ubiquitous Language
 
-Los términos canónicos están en español. La columna **English** da el término equivalente para el código y para la interfaz en inglés; los dos nombran el mismo concepto.
+Canonical terms are in English and are used in code, docs and the English UI. The **Spanish** column gives the equivalent term for the Spanish UI and content; both name the same concept.
 
-## Contenido
+## Content
 
-| Term | English | Definition | Aliases to avoid |
+| Term | Spanish | Definition | Aliases to avoid |
 | --- | --- | --- | --- |
-| **Tema** | Topic | Conjunto ordenado de **Conceptos** sobre un mismo ámbito de la ingeniería, p. ej. *Concurrencia y consistencia en backend*. | Ruta, módulo, track, curso |
-| **Concepto** | Concept | Unidad de lectura del sitio, sobre un mecanismo de ingeniería, con su explicación, ejemplos y **Evaluación**. | Lección, artículo, página, sección, tarjeta |
-| **Objetivo de aprendizaje** | Learning objective | Frase que dice qué debe saber hacer el **Estudiante** tras estudiar un **Concepto**. | Descripción, ítem de checklist, meta |
-| **Versión estática** | Static walkthrough | Representación no interactiva (tabla o diagrama de pasos) de lo que mostrará un **Simulador**. | Placeholder, imagen del simulador |
-| **Traducción** | Translation | Versión de un **Concepto** o **Reto** en un **Idioma** concreto, con el mismo identificador en todos los idiomas. | Variante, copia |
-| **Idioma** | Locale | Idioma en el que se presenta el sitio: español (`es`) o inglés (`en`). | Lengua, language (en español), región |
+| **Topic** | Tema | Ordered set of **Concepts** about one area of engineering, e.g. *Concurrency and consistency in backend*. | Route, module, track, course |
+| **Concept** | Concepto | The site's reading unit, about one engineering mechanism, with its explanation, examples and **Assessment**. | Lesson, article, page, section, card |
+| **Learning objective** | Objetivo de aprendizaje | Sentence stating what the **Learner** should be able to do after studying a **Concept**. | Description, checklist item, goal |
+| **Static walkthrough** | Versión estática | Non-interactive representation (table or step diagram) of what a **Simulator** will show. | Placeholder, simulator image |
+| **Translation** | Traducción | Version of a **Concept** or **Challenge** in a specific **Locale**, with the same id in every locale. | Variant, copy |
+| **Locale** | Idioma | Language the site is presented in: Spanish (`es`) or English (`en`). | Language, region |
 
-## Retos y evaluación
+## Challenges and assessment
 
-| Term | English | Definition | Aliases to avoid |
+| Term | Spanish | Definition | Aliases to avoid |
 | --- | --- | --- | --- |
-| **Reto** | Challenge | Ejercicio suelto, de un **Tipo de reto** concreto, que comprueba la comprensión de un **Concepto**. | Pregunta (como término genérico), ejercicio, quiz, ítem |
-| **Tipo de reto** | Challenge type | Forma del **Reto**: *opción múltiple*, *encontrar el bug*, *ordenar / escenario* o *simulador*. | Modalidad, formato |
-| **Pregunta de opción múltiple** | Multiple-choice question | **Reto** en el que se eligen una o varias **Opciones** de una lista. | Test, quiz, pregunta tipo test |
-| **Opción** | Option | Cada respuesta posible de una **Pregunta de opción múltiple**; puede ser correcta o incorrecta. | Alternativa, choice (en español) |
-| **Explicación** | Explanation | Texto asociado a una **Opción** que justifica por qué es correcta o incorrecta. | Feedback, justificación, pista, solución |
-| **Respuesta** | Answer | Selección que hace el **Estudiante** en un **Reto**. | Intento, envío, submission |
-| **Evaluación** | Assessment | Conjunto de **Retos** de un **Concepto**, que el **Estudiante** resuelve de una vez. | Reto (como conjunto), quiz, test, examen, prueba |
-| **Resultado** | Result | Aciertos sobre total de una **Evaluación** completada, p. ej. 3/4. | Puntuación, score, nota, XP |
-| **Simulador** | Simulator | Modelo interactivo de un mecanismo (p. ej. token bucket) que el **Estudiante** manipula, dentro de la lectura o como **Reto**. | Demo, animación, playground |
+| **Challenge** | Reto | A single exercise, of a specific **Challenge type**, that checks understanding of a **Concept**. | Question (as a generic term), exercise, quiz, item |
+| **Challenge type** | Tipo de reto | Form of a **Challenge**: *multiple choice*, *find the bug*, *ordering / scenario* or *simulator*. | Mode, format |
+| **Multiple-choice question** | Pregunta de opción múltiple | **Challenge** where one or several **Options** are chosen from a list. | Test, quiz |
+| **Option** | Opción | Each possible answer of a **Multiple-choice question**; it can be correct or incorrect. | Alternative, choice |
+| **Explanation** | Explicación | Text attached to an **Option** that justifies why it is correct or incorrect. | Feedback, justification, hint, solution |
+| **Answer** | Respuesta | The selection a **Learner** makes in a **Challenge**. | Attempt, submission |
+| **Assessment** | Evaluación | The set of **Challenges** of a **Concept**, which the **Learner** solves in one go. | Challenge (as a set), quiz, test, exam |
+| **Result** | Resultado | Correct answers over total of a completed **Assessment**, e.g. 3/4. | Score, grade, mark, XP |
+| **Simulator** | Simulador | Interactive model of a mechanism (e.g. token bucket) that the **Learner** manipulates, inside the reading or as a **Challenge**. | Demo, animation, playground |
 
-## Personas
+## People
 
-| Term | English | Definition | Aliases to avoid |
+| Term | Spanish | Definition | Aliases to avoid |
 | --- | --- | --- | --- |
-| **Estudiante** | Learner | Persona anónima que lee **Conceptos** y resuelve **Retos** en el sitio. | Usuario (no hay cuentas), visitante, jugador, alumno |
-| **Autor** | Author | Persona que escribe, revisa y publica el contenido en el repositorio. | Admin, editor, mantenedor |
+| **Learner** | Estudiante | Anonymous person who reads **Concepts** and solves **Challenges** on the site. | User (there are no accounts), visitor, player, student |
+| **Author** | Autor | Person who writes, reviews and publishes content in the repository. | Admin, editor, maintainer |
 
-## Progreso y gamificación (planificado)
+## Progress and gamification (planned)
 
-Estos términos están en PRODUCT.md pero no en el requisito 001. Se refinarán en sus propios requisitos.
+These terms appear in PRODUCT.md but not in requirement 001. They will be refined in their own requirements.
 
-| Term | English | Definition | Aliases to avoid |
+| Term | Spanish | Definition | Aliases to avoid |
 | --- | --- | --- | --- |
-| **Progreso** | Progress | Estado del **Estudiante** en el sitio, guardado solo en su navegador. | Perfil, cuenta, historial |
-| **Estado del concepto** | Concept status | Situación de un **Concepto** para el **Estudiante**: *no empezado*, *en progreso* o *dominado*. | Completado (sin definir), visto |
-| **XP** | XP | Puntos de experiencia que obtiene el **Estudiante** al superar **Retos**. | Puntos, puntuación, score |
-| **Nivel** | Level | Escalón que alcanza el **Estudiante** al acumular **XP**. | Rango, tier, grado |
-| **Racha** | Streak | Número de días consecutivos con actividad del **Estudiante**. | Serie, combo |
-| **Logro** | Achievement | Reconocimiento que desbloquea el **Estudiante** al cumplir una condición concreta. | Medalla, badge, trofeo |
-| **Repaso espaciado** | Spaced review | Programación de nuevos intentos de los **Retos** fallados a intervalos crecientes. | Repetición, revisión, flashcards |
+| **Progress** | Progreso | The **Learner**'s state on the site, stored only in their browser. | Profile, account, history |
+| **Concept status** | Estado del concepto | Situation of a **Concept** for the **Learner**: *not started*, *in progress* or *mastered*. | Completed (undefined), seen |
+| **XP** | XP | Experience points the **Learner** earns by passing **Challenges**. | Points, score |
+| **Level** | Nivel | Step the **Learner** reaches by accumulating **XP**. | Rank, tier, grade |
+| **Streak** | Racha | Number of consecutive days with **Learner** activity. | Series, combo |
+| **Achievement** | Logro | Recognition the **Learner** unlocks by meeting a specific condition. | Medal, badge, trophy |
+| **Spaced review** | Repaso espaciado | Scheduling new attempts at failed **Challenges** at increasing intervals. | Repetition, revision, flashcards |
 
 ## Relationships
 
-- Un **Tema** contiene uno o más **Conceptos**, en un orden fijo.
-- Un **Concepto** pertenece a exactamente un **Tema** y tiene exactamente un **Objetivo de aprendizaje**.
-- Un **Concepto** tiene exactamente una **Evaluación**, formada por uno o más **Retos** (al menos 3 en el requisito 001).
-- Un **Reto** pertenece a exactamente un **Concepto** y tiene exactamente un **Tipo de reto**.
-- Una **Pregunta de opción múltiple** tiene dos o más **Opciones**, al menos una correcta, y cada **Opción** tiene exactamente una **Explicación**.
-- Una **Evaluación** completada produce exactamente un **Resultado**; el **Resultado** no es **XP**.
-- Cada **Concepto** y cada **Reto** tienen una **Traducción** por cada **Idioma**.
+- A **Topic** contains one or more **Concepts**, in a fixed order.
+- A **Concept** belongs to exactly one **Topic** and has exactly one **Learning objective**.
+- A **Concept** has exactly one **Assessment**, made of one or more **Challenges** (at least 3 in requirement 001).
+- A **Challenge** belongs to exactly one **Concept** and has exactly one **Challenge type**.
+- A **Multiple-choice question** has two or more **Options**, at least one correct, and each **Option** has exactly one **Explanation**.
+- A completed **Assessment** produces exactly one **Result**; the **Result** is not **XP**.
+- Each **Concept** and each **Challenge** has one **Translation** per **Locale**.
 
 ## Example dialogue
 
-> **Dev:** "Si el **Estudiante** responde mal una **Pregunta de opción múltiple**, ¿le enseñamos solo la **Explicación** de la **Opción** que eligió?"
-> **Autor:** "No, la de todas las **Opciones**. Muchas veces se aprende más viendo por qué la opción que parecía correcta no lo es."
-> **Dev:** "Cuando termina la **Evaluación** del **Concepto** y ve 3/4, ¿eso es su **XP**?"
-> **Autor:** "No. Eso es el **Resultado** de esa **Evaluación**. El **XP** llegará con la gamificación y se dará por **Reto** superado, no por **Evaluación**."
-> **Dev:** "Entonces, cuando añadamos un 'encontrar el bug', ¿es otra **Evaluación**?"
-> **Autor:** "Es otro **Reto**, con otro **Tipo de reto**, dentro de la misma **Evaluación** del **Concepto**."
+> **Dev:** "If the **Learner** gets a **Multiple-choice question** wrong, do we show only the **Explanation** of the **Option** they chose?"
+> **Author:** "No, the explanations of all **Options**. You often learn more by seeing why the option that looked right isn't."
+> **Dev:** "When they finish a **Concept**'s **Assessment** and see 3/4, is that their **XP**?"
+> **Author:** "No. That's the **Result** of that **Assessment**. **XP** will come with gamification and will be awarded per passed **Challenge**, not per **Assessment**."
+> **Dev:** "So when we add a 'find the bug', is that another **Assessment**?"
+> **Author:** "It's another **Challenge**, with another **Challenge type**, inside the same **Concept**'s **Assessment**."
 
 ## Flagged ambiguities
 
-- "reto" se usaba tanto para un ejercicio suelto (PRODUCT.md, ARCHITECTURE.md) como para el conjunto de preguntas de un concepto (requisito 001). Decisión: **Reto** es el ejercicio suelto y **Evaluación** es el conjunto. Hay que actualizar el requisito 001 ("reto de opción múltiple con todas sus preguntas", "resumen del reto", "repetir el reto").
-- "pregunta" se usaba como sinónimo genérico de ejercicio. Úsese solo en **Pregunta de opción múltiple**; para el término genérico, **Reto**.
-- "sección" designaba las partes numeradas (§1–§15) del material original. No es un **Concepto**: varias secciones pueden alimentar un mismo **Concepto** (p. ej. §7 y §8 → *Transaction isolation*).
-- "ruta" aparecía en PRODUCT.md como sinónimo de **Tema**. Si en el futuro hace falta un itinerario que cruce varios **Temas**, será un término nuevo, no un alias de **Tema**.
-- "puntuación" podía referirse tanto al **Resultado** de una **Evaluación** como al **XP**. Son conceptos distintos y no deben mezclarse en la interfaz.
-- "usuario" sugiere una cuenta, y el sitio no tiene cuentas (PRODUCT.md, *Fuera de alcance*). Úsese **Estudiante**.
+- "challenge" (*reto*) was used both for a single exercise (PRODUCT.md, ARCHITECTURE.md) and for the set of questions of a concept (requirement 001). Decision: **Challenge** is the single exercise and **Assessment** is the set. Requirement 001 must be updated ("multiple-choice challenge with all its questions", "challenge summary", "retry the challenge").
+- "question" was used as a generic synonym for exercise. Use it only in **Multiple-choice question**; for the generic term, use **Challenge**.
+- "section" referred to the numbered parts (§1–§15) of the original material. It is not a **Concept**: several sections can feed one **Concept** (e.g. §7 and §8 → *Transaction isolation*).
+- "route" (*ruta*) appeared in PRODUCT.md as a synonym for **Topic**. If a learning path across several **Topics** is ever needed, it will be a new term, not an alias of **Topic**.
+- "score" could refer both to an **Assessment**'s **Result** and to **XP**. They are different concepts and must not be mixed in the UI.
+- "user" suggests an account, and the site has no accounts (PRODUCT.md, *Non-goals*). Use **Learner**.
