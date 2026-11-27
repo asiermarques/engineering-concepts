@@ -1,0 +1,19 @@
+---
+import TopicPage from '../../../features/concept-reading/TopicPage.astro';
+import { topicPath } from '../../../features/concept-reading/paths';
+import { entryLocale, loadContent } from '../../../features/content-validation/loadContent';
+import { locales, type Locale } from '../../../i18n/ui';
+
+export async function getStaticPaths() {
+  const content = await loadContent();
+  return content.topics.map((topic) => ({
+    params: { locale: entryLocale(topic.id), topic: topic.data.id },
+  }));
+}
+
+const locale = Astro.params.locale as Locale;
+const topicId = Astro.params.topic;
+const alternates = Object.fromEntries(locales.map((l) => [l, topicPath(l, topicId)])) as Record<Locale, string>;
+---
+
+<TopicPage locale={locale} topicId={topicId} alternates={alternates} />

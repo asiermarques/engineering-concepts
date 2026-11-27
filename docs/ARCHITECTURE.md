@@ -41,14 +41,15 @@ src/
     progress/              # repositorio de progreso en el navegador (pendiente)
     gamification/          # XP, niveles, rachas, logros, repaso espaciado (lógica pura, pendiente)
   i18n/ui.ts               # cadenas de interfaz por idioma y utilidades de idioma
-  pages/index.astro        # `/` sirve el tema en inglés
+  pages/index.astro        # `/` sirve la portada (tarjetas de temas) en inglés
   pages/[locale]/index.astro
+  pages/[locale]/topics/[topic].astro
   pages/[locale]/concepts/[id].astro
 tests/e2e/                 # Playwright
 scripts/serve-dist.mjs     # servidor estático de dist/ para e2e
 ```
 
-Las URLs son `/` (inglés), `/<locale>/` (tema) y `/<locale>/concepts/<id>/`, donde `<id>` es el id estable del concepto, igual en todos los idiomas.
+Las URLs son `/` (portada en inglés), `/<locale>/` (portada: una tarjeta por tema), `/<locale>/topics/<tema>/` (presentación y mapa del tema) y `/<locale>/concepts/<id>/`, donde `<tema>` e `<id>` son ids estables, iguales en todos los idiomas. Se construyen con `src/features/concept-reading/paths.ts`.
 
 ## Modelo de contenido
 

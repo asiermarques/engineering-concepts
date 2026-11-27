@@ -4,6 +4,7 @@ import { Assessment } from '../../../features/challenges/Assessment';
 import type { MultipleChoiceChallenge } from '../../../features/challenges/schema';
 import Layout from '../../../features/concept-reading/Layout.astro';
 import { adjacentConcepts } from '../../../features/concept-reading/navigation';
+import { conceptPath, topicPath } from '../../../features/concept-reading/paths';
 import { entryLocale, loadContent } from '../../../features/content-validation/loadContent';
 import { locales, ui, type Locale } from '../../../i18n/ui';
 
@@ -27,21 +28,41 @@ const locale = Astro.params.locale as Locale;
 const t = ui[locale];
 const { Content } = await render(entry);
 const { previous, next } = adjacentConcepts(siblings, entry.data.id);
-const alternates = Object.fromEntries(locales.map((l) => [l, `/${l}/concepts/${entry.data.id}/`])) as Record<Locale, string>;
+const ordered = [...siblings].sort((a, b) => a.order - b.order);
+const position = ordered.findIndex((c) => c.id === entry.data.id) + 1;
+const pad = (n: number) => String(n).padStart(2, '0');
+const alternates = Object.fromEntries(locales.map((l) => [l, conceptPath(l, entry.data.id)])) as Record<Locale, string>;
 ---
 
 <Layout locale={locale} title={entry.data.title} description={entry.data.summary} alternates={alternates}>
-  <p class="breadcrumb"><a href={`/${locale}/`}>{t.backToTopic}</a></p>
-  <article>
-    <h1>{entry.data.title}</h1>
-    <aside class="objective">
-      <strong>{t.learningObjective}:</strong> {entry.data.learningObjective}
-    </aside>
+  <div class="hud">
+    <p class="breadcrumb hud__back"><a href={topicPath(locale, entry.data.topic)}><span aria-hidden="true">◀ </span>{t.backToTopic}</a></p>
+    <p class="hud__stage">
+      <span class="hud__label">{t.conceptLabel}</span>
+      <span aria-hidden="true" class="hud__count">{pad(position)}<span class="hud__total">/{pad(ordered.length)}</span></span>
+      <span class="sr-only">{position} {t.conceptOf} {ordered.length}</span>
+    </p>
+    <ol class="hud__pips" aria-hidden="true">
+      {ordered.map((c, i) => <li class={i + 1 === position ? 'pip pip--current' : i + 1 < position ? 'pip pip--before' : 'pip'} style={`--i:${i}`} />)}
+    </ol>
+  </div>
+  <article class="concept">
+    <header class="concept__header">
+      <h1>{entry.data.title}</h1>
+      <p class="concept__summary">{entry.data.summary}</p>
+      <aside class="objective">
+        <strong class="objective__label"><span aria-hidden="true" class="objective__glyph">◎</span> {t.learningObjective}:</strong>
+        <span class="objective__text">{entry.data.learningObjective}</span>
+      </aside>
+    </header>
     <div class="prose">
       <Content />
     </div>
     <section class="assessment-section" aria-labelledby="assessment-heading">
-      <h2 id="assessment-heading" tabindex="-1">{t.assessment.heading}</h2>
+      <div class="assessment-section__header">
+        <span class="assessment-section__glyph" aria-hidden="true">?</span>
+        <h2 id="assessment-heading" tabindex="-1">{t.assessment.heading}</h2>
+      </div>
       <noscript><p class="notice">{t.assessment.needsJavascript}</p></noscript>
       <Assessment client:only="react" challenges={challenges} labels={t.assessment} headingId="assessment-heading" />
     </section>
@@ -49,15 +70,17 @@ const alternates = Object.fromEntries(locales.map((l) => [l, `/${l}/concepts/${e
   <nav class="concept-nav" aria-label={t.conceptNavigation}>
     {
       previous ? (
-        <a rel="prev" href={`/${locale}/concepts/${previous.id}/`}>
-          <span class="concept-nav__label">← {t.previous}: {previous.title}</span>
+        <a class="concept-nav__link concept-nav__link--prev" rel="prev" href={conceptPath(locale, previous.id)}>
+          <span class="concept-nav__dir"><span aria-hidden="true">◀ </span>{t.previous}:</span>{' '}
+          <span class="concept-nav__title">{previous.title}</span>
         </a>
       ) : <span />
     }
     {
       next ? (
-        <a rel="next" href={`/${locale}/concepts/${next.id}/`}>
-          <span class="concept-nav__label">{t.next}: {next.title} →</span>
+        <a class="concept-nav__link concept-nav__link--next" rel="next" href={conceptPath(locale, next.id)}>
+          <span class="concept-nav__dir">{t.next}:<span aria-hidden="true"> ▶</span></span>{' '}
+          <span class="concept-nav__title">{next.title}</span>
         </a>
       ) : <span />
     }

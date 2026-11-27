@@ -1,6 +1,10 @@
 ---
+import '@fontsource-variable/atkinson-hyperlegible-next/wght.css';
+import '@fontsource-variable/atkinson-hyperlegible-next/wght-italic.css';
+import '@fontsource-variable/atkinson-hyperlegible-mono/wght.css';
+import '@fontsource-variable/pixelify-sans/wght.css';
 import '../../styles/global.css';
-import { locales, otherLocale, ui, type Locale } from '../../i18n/ui';
+import { locales, ui, type Locale } from '../../i18n/ui';
 
 interface Props {
   locale: Locale;
@@ -8,8 +12,10 @@ interface Props {
   description?: string;
   /** URL of the same page in each locale. */
   alternates: Record<Locale, string>;
+  /** `reading` keeps a comfortable line length; `wide` leaves room for the concept map. */
+  width?: 'reading' | 'wide';
 }
-const { locale, title, description, alternates } = Astro.props;
+const { locale, title, description, alternates, width = 'reading' } = Astro.props;
 const t = ui[locale];
 const pageTitle = `${title} · ${t.siteTitle}`;
 ---
@@ -19,35 +25,48 @@ const pageTitle = `${title} · ${t.siteTitle}`;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     {description && <meta name="description" content={description} />}
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{pageTitle}</title>
     {locales.filter((l) => l !== locale).map((l) => <link rel="alternate" hreflang={l} href={alternates[l]} />)}
   </head>
   <body>
     <a class="skip-link" href="#content">{t.skipToContent}</a>
     <header class="site-header">
-      <a class="site-title" href={`/${locale}/`}>{t.siteTitle}</a>
-      <nav aria-label={t.language} data-testid="language-switcher">
-        <ul class="language-switcher">
-          {
-            locales.map((l) => (
-              <li>
-                {l === locale ? (
-                  <span aria-current="true" class="language-switcher__current">
-                    {ui[l].languageName} <span class="sr-only">({t.currentLanguage})</span>
-                  </span>
-                ) : (
-                  <a href={alternates[l]} lang={l} hreflang={l}>
-                    {ui[l].languageName}
-                  </a>
-                )}
-              </li>
-            ))
-          }
-        </ul>
-      </nav>
+      <div class="site-header__inner">
+        <a class="site-title" href={`/${locale}/`}>
+          <svg class="site-title__icon" viewBox="0 0 8 8" width="28" height="28" aria-hidden="true" shape-rendering="crispEdges">
+            <rect x="0" y="1" width="3" height="1" fill="var(--color-accent)" />
+            <rect x="3" y="3" width="3" height="1" fill="var(--color-link)" />
+            <rect x="2" y="5" width="2" height="1" fill="var(--color-accent)" />
+            <rect x="5" y="6" width="3" height="1" fill="var(--color-ok)" />
+            <rect x="0" y="0" width="1" height="8" fill="currentColor" opacity="0.35" />
+          </svg>
+          <span>{t.siteTitle}</span>
+        </a>
+        <nav aria-label={t.language} data-testid="language-switcher">
+          <ul class="language-switcher">
+            {
+              locales.map((l) => (
+                <li>
+                  {l === locale ? (
+                    <span aria-current="true" class="language-switcher__current">
+                      {ui[l].languageName} <span class="sr-only">({t.currentLanguage})</span>
+                    </span>
+                  ) : (
+                    <a href={alternates[l]} lang={l} hreflang={l}>
+                      {ui[l].languageName}
+                    </a>
+                  )}
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+      </div>
     </header>
-    <main id="content">
+    <main id="content" class={`main main--${width}`}>
       <slot />
     </main>
   </body>
