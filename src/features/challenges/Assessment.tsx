@@ -1,27 +1,51 @@
-import { useReducer, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useReducer, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { AssessmentLabels } from '../../i18n/ui';
 import { initialState, reduce, summary, type QuestionState } from './assessmentState';
 import { gradeAnswer, isMultiSelect } from './grading';
 import { splitInlineCode } from './inline';
 import type { MultipleChoiceChallenge } from './schema';
+import { getProgressStore } from '../progress/browser';
+import { clearAttempt, recordResult, restoreState, saveAnswer } from '../progress/progress';
+import type { ProgressStore } from '../progress/store';
 
 interface Props {
+  /** Stable id of the Concept; Progress is saved under it. */
+  conceptId: string;
   challenges: MultipleChoiceChallenge[];
   labels: AssessmentLabels;
   /** Id of the heading that receives focus after repeating the assessment. */
   headingId?: string;
+  /** Defaults to the browser's shared store. */
+  store?: ProgressStore;
 }
 
 const Inline = ({ text }: { text: string }): ReactNode =>
   splitInlineCode(text).map((part, i) => (part.code ? <code key={i}>{part.text}</code> : part.text));
 
-export function Assessment({ challenges, labels, headingId }: Props) {
+export function Assessment({ conceptId, challenges, labels, headingId, store = getProgressStore() }: Props) {
   const [state, dispatch] = useReducer(
     (s: ReturnType<typeof initialState>, a: Parameters<typeof reduce>[2]) => reduce(challenges, s, a),
     undefined,
-    initialState,
+    () => restoreState(store.get(), conceptId, challenges),
   );
   const { result, answered, total } = summary(challenges, state);
+  const canSave = useSyncExternalStore(store.subscribe, store.canSave, () => true);
+
+  // Persist every change after the first render: answers as they are graded, the Result on completion.
+  const saved = useRef(state);
+  useEffect(() => {
+    const previous = saved.current;
+    if (previous === state) return;
+    saved.current = state;
+    store.update((progress) => {
+      let next = clearAttempt(progress, conceptId);
+      for (const [challengeId, question] of Object.entries(state)) {
+        if (question.submitted) next = saveAnswer(next, conceptId, challengeId, question.selected);
+      }
+      const completed = summary(challenges, state).result;
+      return completed && !summary(challenges, previous).result ? recordResult(next, conceptId, completed) : next;
+    });
+  }, [state, store, conceptId, challenges]);
 
   const repeat = () => {
     dispatch({ type: 'reset' });
@@ -30,6 +54,7 @@ export function Assessment({ challenges, labels, headingId }: Props) {
 
   return (
     <div className={`assessment${result ? ' assessment--done' : ''}`}>
+      {!canSave && <p className="notice" role="status">{labels.cannotSave}</p>}
       <div className="meter">
         <p className="meter__text">
           {labels.answered}: <strong>{answered}/{total}</strong>

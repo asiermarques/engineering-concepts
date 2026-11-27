@@ -6,7 +6,7 @@ export interface QuestionState {
   submitted: boolean;
 }
 
-/** In-memory state of an assessment, keyed by challenge id. Never persisted (BR-005). */
+/** In-memory state of an assessment, keyed by challenge id. Persisted by the Assessment island through `features/progress`; the reducer itself stays pure. */
 export type AssessmentState = Record<string, QuestionState>;
 
 export type Action =

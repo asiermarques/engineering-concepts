@@ -34,9 +34,9 @@ Canonical terms are in English and are used in code, docs and the English UI. Th
 | **Learner** | Estudiante | Anonymous person who reads **Concepts** and solves **Challenges** on the site. | User (there are no accounts), visitor, player, student |
 | **Author** | Autor | Person who writes, reviews and publishes content in the repository. | Admin, editor, maintainer |
 
-## Progress and gamification (planned)
+## Progress and gamification
 
-These terms appear in PRODUCT.md but not in requirement 001. They will be refined in their own requirements.
+**Progress** and **Concept status** are implemented (requirement 002); the rest appear in PRODUCT.md and will be refined in their own requirements.
 
 | Term | Spanish | Definition | Aliases to avoid |
 | --- | --- | --- | --- |

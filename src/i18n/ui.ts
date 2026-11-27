@@ -22,6 +22,26 @@ export interface AssessmentLabels {
   repeat: string;
   answered: string;
   question: string;
+  cannotSave: string;
+}
+
+export interface ProgressLabels {
+  status: { 'not-started': string; 'in-progress': string; mastered: string };
+  lastResult: string;
+  masteredUnit: string;
+  heading: string;
+  description: string;
+  reset: string;
+  resetConfirm: string;
+  resetConfirmYes: string;
+  resetDone: string;
+  export: string;
+  import: string;
+  importConfirm: string;
+  importConfirmYes: string;
+  importDone: string;
+  importInvalid: string;
+  cancel: string;
 }
 
 export interface UiStrings {
@@ -50,6 +70,7 @@ export interface UiStrings {
   enterTopic: string;
   allTopics: string;
   assessment: AssessmentLabels;
+  progress: ProgressLabels;
 }
 
 export const ui: Record<Locale, UiStrings> = {
@@ -93,6 +114,25 @@ export const ui: Record<Locale, UiStrings> = {
       repeat: 'Repeat assessment',
       answered: 'Answered',
       question: 'Question',
+      cannotSave: "Progress can't be saved in this browser: it will be lost when you leave this page.",
+    },
+  progress: {
+      status: { 'not-started': 'Not started', 'in-progress': 'In progress', mastered: 'Mastered' },
+      lastResult: 'Last result',
+      masteredUnit: 'mastered',
+      heading: 'Your progress',
+      description: 'Saved only in this browser. Export it to keep a copy or to continue in another browser.',
+      reset: 'Reset progress',
+      resetConfirm: 'This erases all your progress in this browser. Do you want to reset it?',
+      resetConfirmYes: 'Yes, reset',
+      resetDone: 'Progress reset.',
+      export: 'Export progress',
+      import: 'Import progress',
+      importConfirm: 'Importing replaces all your current progress with the file. Do you want to continue?',
+      importConfirmYes: 'Yes, import',
+      importDone: 'Progress imported.',
+      importInvalid: "This file can't be imported: it is not a valid progress file. Your progress has not changed.",
+      cancel: 'Cancel',
     },
   },
   es: {
@@ -135,6 +175,25 @@ export const ui: Record<Locale, UiStrings> = {
       repeat: 'Repetir evaluación',
       answered: 'Respondidas',
       question: 'Pregunta',
+      cannotSave: 'El progreso no se puede guardar en este navegador: se perderá al salir de esta página.',
+    },
+  progress: {
+      status: { 'not-started': 'Sin empezar', 'in-progress': 'En curso', mastered: 'Dominado' },
+      lastResult: 'Último resultado',
+      masteredUnit: 'dominados',
+      heading: 'Tu progreso',
+      description: 'Se guarda solo en este navegador. Expórtalo para conservar una copia o continuar en otro navegador.',
+      reset: 'Reiniciar progreso',
+      resetConfirm: 'Esto borra todo tu progreso en este navegador. ¿Quieres reiniciarlo?',
+      resetConfirmYes: 'Sí, reiniciar',
+      resetDone: 'Progreso reiniciado.',
+      export: 'Exportar progreso',
+      import: 'Importar progreso',
+      importConfirm: 'Importar reemplaza todo tu progreso actual con el del archivo. ¿Quieres continuar?',
+      importConfirmYes: 'Sí, importar',
+      importDone: 'Progreso importado.',
+      importInvalid: 'No se puede importar este archivo: no es un archivo de progreso válido. Tu progreso no ha cambiado.',
+      cancel: 'Cancelar',
     },
   },
 };

@@ -852,3 +852,40 @@ code {
   .option__key { width: 1.75rem; height: 1.75rem; }
   .option__feedback { padding-left: var(--space-2); padding-right: var(--space-2); }
 }
+
+/* ---------- Saved progress ---------- */
+
+/* Concept status on the topic map: painted on the map number, always with text as well. */
+.stage__status {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-mono); font-weight: 700; font-size: 0.9rem; color: var(--color-muted);
+}
+.stage__status:empty { display: none; }
+.stage[data-status='in-progress'] .stage__num { background: var(--color-surface-2); border-style: dashed; }
+.stage[data-status='mastered'] .stage__num { background: var(--color-accent); color: var(--color-on-accent); }
+.stage[data-status='mastered'] .stage__status { color: var(--color-ok); }
+.stage[data-status='mastered'] .stage__status::before { content: '★ '; }
+
+.topic-card__mastered {
+  margin: 0; font-family: var(--font-mono); font-weight: 700; font-size: 1rem; color: var(--color-accent-ink);
+}
+.topic-card__mastered:empty { display: none; }
+
+.progress-panel {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 2px solid var(--color-border-strong); box-shadow: var(--shadow-hard);
+  display: grid; gap: var(--space-3);
+}
+.progress-panel__title { margin: 0; font-size: 1.3rem; }
+.progress-panel__description { margin: 0; color: var(--color-muted); }
+.progress-panel__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.progress-panel__confirm {
+  display: grid; gap: var(--space-3); padding: var(--space-3);
+  background: var(--color-warn-bg); border: 2px solid var(--color-warn); color: var(--color-text);
+}
+.progress-panel__confirm p { margin: 0; font-weight: 600; }
+.progress-panel__message { margin: 0; font-weight: 600; min-height: 1.5em; }
+.progress-panel__message--error { color: var(--color-bad); }
+.button--danger { border-color: var(--color-bad); }

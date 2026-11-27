@@ -64,7 +64,7 @@ const alternates = Object.fromEntries(locales.map((l) => [l, conceptPath(l, entr
         <h2 id="assessment-heading" tabindex="-1">{t.assessment.heading}</h2>
       </div>
       <noscript><p class="notice">{t.assessment.needsJavascript}</p></noscript>
-      <Assessment client:only="react" challenges={challenges} labels={t.assessment} headingId="assessment-heading" />
+      <Assessment client:only="react" conceptId={entry.data.id} challenges={challenges} labels={t.assessment} headingId="assessment-heading" />
     </section>
   </article>
   <nav class="concept-nav" aria-label={t.conceptNavigation}>

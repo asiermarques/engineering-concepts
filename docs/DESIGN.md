@@ -31,6 +31,8 @@ Rule: Pixelify Sans is not used for digits, single letters or uppercase text: th
 - **Topic map** (`.stage-map`): numbered concepts on a dotted rail; the whole card is the link.
 - **Concept HUD** (`.hud`): position `04/13` and a segmented bar showing position, not progress.
 - **Assessment**: area with a diagonal hatch; segmented bar of answered questions (green/red), "Question n/N" label, A/B/C keys for single-answer questions and pixel checkboxes for multi-answer ones; final panel with the Result and decorative stars.
+- **Concept status** (`.stage[data-status]`, `.stage__status`): painted client-side on the map number and always with text: *mastered* uses the accent fill and a ★, *in progress* a dashed border; the last **Result** follows in `--font-mono`. Home cards show `n/N mastered` (`.topic-card__mastered`).
+- **Progress panel** (`.progress-panel`): hard-shadow panel under the topic cards with Export, Import and Reset; confirmations are in-page (`.progress-panel__confirm`, warn colors), never browser dialogs.
 - **Static walkthrough**: "replay"-style table with steps numbered in mono.
 
 ## Motion
@@ -39,4 +41,4 @@ Staggered entrances on the home page and the map, a `stamp` on the verdict and t
 
 ## Pending for gamification
 
-XP, levels, streaks and achievements should reuse these patterns: numbers in `--font-mono`, rewards in `--color-accent` and hard-shadow panels. Concept status can be painted on the map number (`.stage__num`) and on the HUD segments.
+XP, levels, streaks and achievements should reuse these patterns: numbers in `--font-mono`, rewards in `--color-accent` and hard-shadow panels. Concept status is already painted on the map number (`.stage__num`); it could also be shown on the HUD segments.

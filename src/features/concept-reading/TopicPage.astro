@@ -51,15 +51,16 @@ const pad = (n: number) => String(n).padStart(2, '0');
 
     <section class="map" aria-labelledby="concepts-heading">
       <h2 id="concepts-heading" class="section-title">{t.topicConcepts}</h2>
-      <ol class="concept-list stage-map" data-testid="concept-list">
+      <ol class="concept-list stage-map" data-testid="concept-list" data-progress-map data-labels={JSON.stringify(t.progress)}>
         {
           concepts.map((concept, index) => (
-            <li class="stage" style={`--i:${index}`}>
+            <li class="stage" style={`--i:${index}`} data-concept-id={concept.data.id}>
               <span class="stage__num" aria-hidden="true">{pad(index + 1)}</span>
               <div class="stage__body">
                 <h2>
                   <a class="stage__link" href={conceptPath(locale, concept.data.id)}>{concept.data.title}</a>
                 </h2>
+                <p class="stage__status" data-testid="concept-status"></p>
                 <p class="concept-list__objective">
                   <strong>{t.learningObjective}:</strong> {concept.data.learningObjective}
                 </p>
@@ -72,3 +73,17 @@ const pad = (n: number) => String(n).padStart(2, '0');
     </section>
   </div>
 </Layout>
+
+<script>
+  import { getProgressStore } from '../progress/browser';
+  import { paintTopicMap } from '../progress/paint';
+
+  const map = document.querySelector<HTMLElement>('[data-progress-map]');
+  if (map) {
+    const store = getProgressStore();
+    const labels = JSON.parse(map.dataset.labels ?? '{}');
+    const paint = () => paintTopicMap(map, store.get(), labels);
+    paint();
+    store.subscribe(paint);
+  }
+</script>

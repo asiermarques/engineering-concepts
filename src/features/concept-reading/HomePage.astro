@@ -1,6 +1,7 @@
 ---
 import { entryLocale, loadContent } from '../content-validation/loadContent';
 import { ui, type Locale } from '../../i18n/ui';
+import { ProgressPanel } from '../progress/ProgressPanel';
 import Layout from './Layout.astro';
 import { topicPath } from './paths';
 
@@ -18,7 +19,7 @@ const concepts = content.concepts.filter((c) => entryLocale(c.id) === locale);
 const topics = content.topics
   .filter((topic) => entryLocale(topic.id) === locale)
   .sort((a, b) => a.data.id.localeCompare(b.data.id))
-  .map((topic) => ({ ...topic.data, conceptCount: concepts.filter((c) => c.data.topic === topic.data.id).length }));
+  .map((topic) => ({ ...topic.data, conceptIds: concepts.filter((c) => c.data.topic === topic.data.id).map((c) => c.data.id) }));
 const pad = (n: number) => String(n).padStart(2, '0');
 ---
 
@@ -32,20 +33,21 @@ const pad = (n: number) => String(n).padStart(2, '0');
     <p class="hero__summary">{t.homeSummary}</p>
   </section>
 
-  <ul class="topic-grid" data-testid="topic-list">
+  <ul class="topic-grid" data-testid="topic-list" data-labels={JSON.stringify(t.progress)}>
     {
       topics.map((topic, index) => (
-        <li class="topic-card" style={`--i:${index}`}>
+        <li class="topic-card" style={`--i:${index}`} data-topic-concepts={topic.conceptIds.join(',')}>
           <p class="topic-card__meta">
             <span class="topic-card__slot" aria-hidden="true">{pad(index + 1)}</span>
             <span>
-              <span class="topic-card__count">{topic.conceptCount}</span> {t.conceptsUnit}
+              <span class="topic-card__count">{topic.conceptIds.length}</span> {t.conceptsUnit}
             </span>
           </p>
           <h2 class="topic-card__title">
             <a class="topic-card__link" href={topicPath(locale, topic.id)}>{topic.title}</a>
           </h2>
           <p class="topic-card__summary">{topic.summary}</p>
+          <p class="topic-card__mastered" data-testid="topic-mastered"></p>
           <span class="topic-card__cta" aria-hidden="true">
             {t.enterTopic} <span class="topic-card__glyph">▶</span>
           </span>
@@ -53,4 +55,17 @@ const pad = (n: number) => String(n).padStart(2, '0');
       ))
     }
   </ul>
+
+  <ProgressPanel client:only="react" labels={t.progress} />
 </Layout>
+
+<script>
+  import { getProgressStore } from '../progress/browser';
+  import { paintTopicCards } from '../progress/paint';
+
+  const labels = JSON.parse(document.querySelector<HTMLElement>('[data-testid="topic-list"]')?.dataset.labels ?? '{}');
+  const store = getProgressStore();
+  const paint = () => paintTopicCards(document, store.get(), labels);
+  paint();
+  store.subscribe(paint);
+</script>

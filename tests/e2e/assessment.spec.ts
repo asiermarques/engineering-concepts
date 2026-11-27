@@ -61,18 +61,6 @@ test.describe('assessment', () => {
     await expect(page.locator('.question').first().locator('.verdict')).toBeVisible();
   });
 
-  test('reloading or switching language restarts the assessment', async ({ page }) => {
-    await open(page);
-    await page.locator('.question').first().locator('.option__button').first().click();
-    await expect(page.locator('.verdict')).toHaveCount(1);
-    await page.reload();
-    await expect(page.locator('.verdict')).toHaveCount(0);
-    await page.locator('.question').first().locator('.option__button').first().click();
-    await page.getByRole('link', { name: 'Español' }).click();
-    await expect(page.locator('.assessment')).toBeVisible();
-    await expect(page.locator('.verdict')).toHaveCount(0);
-  });
-
   test('every concept has an assessment of 3 to 5 questions in both languages', async ({ page }) => {
     const ids = ['race-condition', 'atomicity', 'synchronized-mutex', 'optimistic-locking', 'pessimistic-locking', 'idempotency', 'distributed-locking', 'transaction-isolation', 'coroutines-threads', 'fan-out-fan-in', 'concurrency-limiting', 'resilience', 'saga'];
     for (const locale of ['en', 'es']) {

@@ -39,7 +39,9 @@ src/
     challenges/            # schema, grading, state and UI (React island) of the Assessment
     content-validation/    # cross-file rules (translations, minimum challenges) and validated loading
     simulators/            # Static walkthrough (StaticWalkthrough.astro); React simulators in the future
-    progress/              # in-browser progress repository (pending)
+    progress/              # progress.ts (pure model: status, results, versioned parse/migrate), store.ts
+                           # (the only storage access), browser.ts (shared store), paint.ts (map/card DOM),
+                           # ProgressPanel.tsx (reset/export/import island)
     gamification/          # XP, levels, streaks, achievements, spaced review (pure logic, pending)
   i18n/ui.ts               # UI strings per locale and locale utilities
   pages/index.astro        # `/` serves the home page (topic cards) in English
@@ -70,7 +72,7 @@ URLs are `/` (English home page), `/<locale>/` (home page: one card per topic), 
 ## Browser state
 
 - A single module (`features/progress`) encapsulates reads and writes; the rest of the code does not access storage directly.
-- Stored state carries a **schema version number** and migrations, so the gamification model can evolve without losing existing progress.
+- Storage key `engineering-concepts:progress`; JSON `{ version, concepts: { [conceptId]: { answers: { [challengeId]: optionIds[] }, last, best } } }`. Stored state carries a **schema version number** and migrations (`migrations` in `progress.ts`, N → N+1; version 1 is the first), so the gamification model can evolve without losing existing progress.
 - If storage is unavailable or returns corrupt data, the app works with in-memory state and does not fail.
 - Gamification logic (XP, levels, streaks, spaced review) consists of **pure functions** over the state, with no React or browser dependencies, so it can be tested in isolation. Dates are injected, not read from the clock inside the logic.
 
@@ -82,7 +84,9 @@ URLs are `/` (English home page), `/<locale>/` (home page: one card per topic), 
 - Tools: **Vitest** (pure logic and React components with Testing Library + jsdom, `*.test.ts(x)` files next to the code) and **Playwright** (`tests/e2e`, against `dist/` served by `scripts/serve-dist.mjs`, because `astro preview` detaches to the background and cannot be supervised by Playwright).
 - Commands: `npm test`, `npm run test:e2e`, `npm run build`, `npm run verify` (tests + build, before every push).
 - The **Assessment** is a `client:only="react"` island: without JavaScript only a notice is shown (`<noscript>`).
-- Assessment state is in memory only (no storage) until the progress requirement.
+- The **Assessment** island receives its `conceptId`, restores its state from saved **Progress** (`restoreState`, which applies the content-change rules: removed challenges ignored, answers with unknown options unanswered) and saves every change through the store (`useEffect` around the pure reducer). Last write wins between tabs.
+- The topic map (`[data-concept-id]`, `.stage__status`) and the home cards (`[data-topic-concepts]`, `.topic-card__mastered`) are static HTML painted by small client scripts using `paint.ts`; without JavaScript they keep their baseline. All scripts and islands of a page share one store (`getProgressStore()`) and repaint on change.
+- Storage failures (blocked, full, corrupt) degrade to in-memory state; `store.canSave()` drives the notice in the **Assessment**.
 
 ## Workflow (trunk-based)
 

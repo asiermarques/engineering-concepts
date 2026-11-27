@@ -21,7 +21,7 @@ The site works as a **learning game**: progress, experience points (XP), levels,
 
 ## Current state
 
-Implemented (requirement 001): the topic *Concurrency and consistency in backend* with its 13 concepts in Spanish and English, each with its **Assessment** of multiple-choice questions (one or several correct answers, explanation per option, **Result** and retry) and a **Static walkthrough** of the simulator sequences. No progress, XP or persistence: reloading or switching locale resets the Assessment. The content was written by Claude from the original material (sections 1–15) and is **pending technical review by the Author**.
+Implemented (requirement 001): the topic *Concurrency and consistency in backend* with its 13 concepts in Spanish and English, each with its **Assessment** of multiple-choice questions (one or several correct answers, explanation per option, **Result** and retry) and a **Static walkthrough** of the simulator sequences. Local progress saving (requirement 002): the **Learner**'s **Answers**, best and last **Result** and **Concept status** are kept in the browser, so a half-done **Assessment** survives a reload or locale switch; the topic map shows each **Concept status** and last **Result**, the home topic cards show the mastered count, and the home page has a "Your progress" panel to reset, export and import **Progress**. No XP, levels, streaks, achievements or spaced review yet. The content was written by Claude from the original material (sections 1–15) and is **pending technical review by the Author**.
 
 ## Product scope
 
@@ -53,7 +53,10 @@ The vision is the full game; each feature is defined and prioritised in its own 
 ### Progress
 
 - Stored **only in each learner's browser**. No sync between devices.
-- The site must keep working when browser storage is unavailable (private mode, cleared data): learners can read and answer, but progress is not kept.
+- The site must keep working when browser storage is unavailable (private mode, cleared data): learners can read and answer, but progress is not kept, and a discreet notice near the **Assessment** says so.
+- **Concept status**: *not started* (no **Answer**), *in progress* (some **Answer**, never a fully correct completed **Assessment**), *mastered* (at least one completed **Assessment** with every question correct). *Mastered* is sticky: a worse later attempt does not undo it; the last **Result** is shown. This is deliberate.
+- Retrying starts a new attempt with all questions unanswered; the best and last **Result** are kept.
+- The **Learner** can reset **Progress** (in-page confirmation), export it to a JSON file and import such a file; importing **replaces** current **Progress** after an in-page confirmation. The file contains only **Progress** and its schema version.
 
 ## Non-goals
 
@@ -74,6 +77,5 @@ The vision is the full game; each feature is defined and prioritised in its own 
 ## Open product questions
 
 - Are concepts **unlocked** in order by passing challenges, or is all content accessible from the start with progression being informational only? (As a public site, locking the reading may frustrate someone who arrives looking for a specific concept.)
-- XP and level formula, and what counts as a *mastered* concept.
+- XP and level formula.
 - Spaced review algorithm (e.g. Leitner boxes or SM-2).
-- Export and import progress (JSON file) to mitigate the lack of sync?

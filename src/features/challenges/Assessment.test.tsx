@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { Assessment } from './Assessment';
 import { ui } from '../../i18n/ui';
 import type { MultipleChoiceChallenge } from './schema';
+import { createProgressStore } from '../progress/store';
 
 afterEach(cleanup);
 
@@ -31,7 +32,7 @@ const challenges: MultipleChoiceChallenge[] = [
 ];
 
 const labels = ui.en.assessment;
-const setup = () => render(<Assessment challenges={challenges} labels={labels} />);
+const setup = () => render(<Assessment conceptId="test" challenges={challenges} labels={labels} store={createProgressStore(null)} />);
 
 describe('<Assessment />', () => {
   it('grades a single-answer question immediately and shows every explanation', async () => {
