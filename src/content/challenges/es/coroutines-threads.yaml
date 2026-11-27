@@ -1,0 +1,83 @@
+concept: coroutines-threads
+challenges:
+  - id: ct-1
+    type: multiple-choice
+    prompt: ¿Qué afirmación describe la diferencia entre concurrencia y paralelismo?
+    options:
+      - id: a
+        text: La concurrencia es que las tareas se solapen en el tiempo, incluso en un núcleo. El paralelismo es que las tareas se ejecuten en el mismo instante en varios núcleos.
+        correct: true
+        explanation: La concurrencia trata de la estructura y el progreso de varias tareas. El paralelismo trata de la ejecución simultánea.
+      - id: b
+        text: Son sinónimos.
+        correct: false
+        explanation: Una máquina de un solo núcleo puede ser concurrente pero nunca paralela.
+      - id: c
+        text: El paralelismo necesita corrutinas y la concurrencia necesita threads.
+        correct: false
+        explanation: Ambas ideas son independientes de la herramienta que las implementa.
+  - id: ct-2
+    type: multiple-choice
+    prompt: Una corrutina llama a una consulta JDBC bloqueante en `Dispatchers.Default`, que tiene tantos hilos como núcleos. Bajo carga, ¿cuál es el resultado probable?
+    options:
+      - id: a
+        text: Los pocos hilos quedan todos bloqueados esperando a la base de datos, así que las demás corrutinas se quedan sin ejecutar y sube la latencia.
+        correct: true
+        explanation: Default está dimensionado para trabajo CPU-bound. Las llamadas bloqueantes van en `Dispatchers.IO` o en un pool dedicado.
+      - id: b
+        text: Nada, las corrutinas hacen no bloqueante cada llamada automáticamente.
+        correct: false
+        explanation: Una corrutina solo se suspende en llamadas suspendibles. Una llamada bloqueante sigue bloqueando el hilo.
+      - id: c
+        text: La JVM crea un hilo nuevo por cada llamada bloqueada.
+        correct: false
+        explanation: El dispatcher tiene un tamaño fijo y no crece por trabajo bloqueado.
+  - id: ct-3
+    type: multiple-choice
+    prompt: ¿Cuál es la diferencia entre `delay(200)` y `Thread.sleep(200)` dentro de una corrutina?
+    options:
+      - id: a
+        text: "`delay` suspende la corrutina y libera el hilo. `Thread.sleep` bloquea el hilo."
+        correct: true
+        explanation: La suspensión permite que el hilo atienda otras corrutinas mientras espera.
+      - id: b
+        text: Son idénticos.
+        correct: false
+        explanation: Ambos esperan 200 ms, pero solo uno desperdicia un hilo mientras espera.
+      - id: c
+        text: "`delay` es más rápido porque usa más núcleos."
+        correct: false
+        explanation: La duración es la misma, y ninguno usa más núcleos.
+  - id: ct-4
+    type: multiple-choice
+    prompt: ¿Qué tipo de trabajo se beneficia más de ejecutar más tareas concurrentes, incluso con pocos hilos?
+    options:
+      - id: a
+        text: Trabajo I/O-bound, como muchas llamadas HTTP o de base de datos que esperan la mayor parte del tiempo.
+        correct: true
+        explanation: Mientras una tarea espera, el hilo puede avanzar otras, así que el tiempo total se acerca a la espera más larga.
+      - id: b
+        text: Trabajo CPU-bound, como hashing, en una máquina con 4 núcleos y 400 hilos.
+        correct: false
+        explanation: El trabajo CPU-bound está limitado por los núcleos. Más hilos que núcleos añade sobrecarga.
+      - id: c
+        text: Solo el trabajo que nunca espera.
+        correct: false
+        explanation: El trabajo que nunca espera no gana nada solapando esperas.
+
+  - id: ct-5
+    type: multiple-choice
+    prompt: ¿Cuál es el riesgo principal de un modelo de event loop como Netty o Node.js?
+    options:
+      - id: a
+        text: Ejecutar una operación bloqueante o costosa en CPU en el hilo del event loop, lo que retrasa a todas las peticiones que dependen de ese hilo.
+        correct: true
+        explanation: Pocos hilos de event loop atienden muchas conexiones, así que bloquear uno los detiene a todos.
+      - id: b
+        text: Necesita un hilo por conexión.
+        correct: false
+        explanation: El objetivo del modelo es gestionar muchas conexiones con pocos hilos.
+      - id: c
+        text: No puede hacer I/O de red.
+        correct: false
+        explanation: El I/O de red no bloqueante es justo para lo que sirve.

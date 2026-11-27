@@ -1,0 +1,104 @@
+---
+id: synchronized-mutex
+title: Synchronized y mutex
+topic: backend-concurrency
+order: 3
+learningObjective: Entender qué protege un lock local y por qué no funciona entre pods.
+summary: Un lock local serializa hilos dentro de un proceso, y nada más.
+---
+
+Un **lock local** (un monitor, un mutex) deja que solo un hilo a la vez ejecute una sección crítica. Es la herramienta adecuada para proteger **estado en memoria de un proceso**.
+
+```java
+public class PaymentService {
+    public synchronized void pay(long orderId) {   // un monitor por instancia de PaymentService
+        Order order = orders.findById(orderId);
+        if (order.getStatus() == Status.PENDING) {
+            gateway.charge(order.getTotal());
+            order.setStatus(Status.PAID);
+            orders.save(order);
+        }
+    }
+}
+```
+
+Con una sola instancia esto elimina la carrera de los conceptos anteriores. En corrutinas de Kotlin el equivalente no bloquea el hilo:
+
+```kotlin
+private val mutex = Mutex()
+
+suspend fun pay(orderId: Long) = mutex.withLock {
+    // sección crítica; las demás corrutinas se suspenden en vez de bloquear un hilo
+}
+```
+
+## El contador en memoria
+
+```java
+class Counter {
+    private int count = 0;
+
+    public void increment() {
+        count++;      // conceptualmente: leer, incrementar y escribir
+    }
+}
+```
+
+Dos hilos pueden leer ambos 5 y escribir ambos 6, cuando el resultado debería ser 7. Si el método es `synchronized`, el hilo adquiere al entrar el **monitor** de esa instancia, y cualquier otro hilo que use el mismo monitor espera.
+
+También puedes proteger solo un bloque, lo que mantiene pequeña la sección crítica:
+
+```java
+private final Object lock = new Object();
+
+public void increment() {
+    synchronized (lock) {
+        count++;
+    }
+}
+```
+
+`synchronized` también da garantías de **visibilidad de memoria** entre hilos que usan el mismo monitor.
+
+## Mutex y sus alternativas
+
+Un **mutex** (*mutual exclusion*) es el concepto general; `synchronized` es una forma de conseguirlo en Java.
+
+| Mecanismo | Características |
+| --- | --- |
+| `synchronized` | Adquiere y libera el monitor automáticamente. |
+| `ReentrantLock` | Control explícito de la adquisición, la liberación y los tiempos de espera. |
+| `Mutex` de Kotlin | Suspende la corrutina mientras espera, sin bloquear el hilo. |
+| `Semaphore` | Limita el acceso a N ejecuciones simultáneas, no solo una. |
+| `AtomicInteger` | Operaciones atómicas sobre un entero sin un monitor explícito. |
+
+## Por qué falla entre pods
+
+El lock vive en la memoria de **una JVM**. Si despliegas en Kubernetes con tres réplicas, cada réplica tiene su propia JVM, memoria y locks, así que las tres pueden entrar a la vez en sus secciones críticas. Hay tres locks independientes, y una petición al pod 1 y otra al pod 2 nunca se ven.
+
+| Escenario | ¿Lo protege un lock local? |
+| --- | --- |
+| Dos hilos, un pod | Sí |
+| Dos peticiones en dos pods | **No** |
+| Dos servicios que escriben la misma tabla | **No** |
+| Un pod se reinicia a mitad de operación | No, el lock desaparece con el proceso |
+
+## Granularidad y coste
+
+- `synchronized` sobre todo el servicio serializa **todos** los pedidos, incluso los que no tienen relación, y limita el throughput. Un lock por clave (por id de pedido) limita la contención a las peticiones que realmente chocan.
+- No mantengas un lock local mientras llamas a servicios externos lentos: todos los demás hilos esperan.
+- Prefiere estructuras concurrentes (`ConcurrentHashMap`, `AtomicLong`) para contadores simples en memoria.
+
+El estado compartido en una base de datos o entre pods necesita un mecanismo que imponga la **base de datos** o un **coordinador compartido**: actualizaciones atómicas, versionado, locks de fila, claves de idempotencia o locks distribuidos.
+
+## Trampas
+
+- **`synchronized` más `@Transactional`**: Spring abre y confirma la transacción en un proxy *alrededor* del método, así que el lock se libera **antes del commit**. Un segundo hilo puede entrar, leer el estado confirmado antiguo y repetir el trabajo, incluso con un solo pod.
+- **Virtual threads**: antes de JDK 24, un virtual thread que se bloquea dentro de `synchronized` *fija* (pinning) su hilo portador, así que unos pocos pueden detener el planificador. `ReentrantLock` no tenía este problema; JDK 24 eliminó la mayor parte del pinning (JEP 491).
+- **El `Mutex` de Kotlin no es reentrante**: llamar otra vez a `withLock` desde dentro del mismo lock bloquea la corrutina para siempre. Además, un punto de suspensión dentro de un bloque `synchronized` no compila, a propósito.
+- **Esperar para siempre**: `ReentrantLock.tryLock(200, MILLISECONDS)` permite rendirse en vez de bloquearse indefinidamente.
+- **Un lock solo ayuda si todos los accesos usan el mismo lock**: una sola lectura o escritura sin proteger rompe la garantía.
+
+## Pregunta típica de entrevista
+
+*¿Podemos garantizar que un pago no se duplica usando `synchronized`?* No, si hay varias instancias del servicio. Necesitas un mecanismo de coordinación **compartido** por todas.

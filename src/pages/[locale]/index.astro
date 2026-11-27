@@ -1,0 +1,8 @@
+---
+import TopicPage from '../../features/concept-reading/TopicPage.astro';
+import { locales } from '../../i18n/ui';
+
+export const getStaticPaths = () => locales.map((locale) => ({ params: { locale } }));
+---
+
+<TopicPage locale={Astro.params.locale as 'en' | 'es'} alternates={{ en: '/en/', es: '/es/' }} />

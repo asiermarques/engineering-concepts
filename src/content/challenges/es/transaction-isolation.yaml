@@ -1,0 +1,87 @@
+concept: transaction-isolation
+challenges:
+  - id: ti-1
+    type: multiple-choice
+    prompt: En una base de datos con MVCC, ¿qué pasa cuando una consulta larga de informe lee una tabla mientras se escriben pagos en ella?
+    options:
+      - id: a
+        text: El informe lee de un snapshot consistente, y ni los lectores ni los escritores se bloquean entre sí.
+        correct: true
+        explanation: Cada transacción ve una versión de los datos. Los escritores crean nuevas versiones de fila en vez de bloquear a los lectores.
+      - id: b
+        text: El informe bloquea todas las escrituras hasta que termina.
+        correct: false
+        explanation: Así funcionan los locks de lectura en motores basados en locks, no en MVCC.
+      - id: c
+        text: El informe ve pagos sin confirmar.
+        correct: false
+        explanation: Con READ COMMITTED o más fuerte, los cambios sin confirmar nunca son visibles.
+  - id: ti-2
+    type: multiple-choice
+    prompt: Dos médicos de guardia comprueban que haya al menos 2 de guardia y luego se retiran, en transacciones separadas con snapshot isolation. ¿Qué anomalía es?
+    options:
+      - id: a
+        text: Write skew. Cada transacción escribe una fila distinta, pero juntas rompen el invariante.
+        correct: true
+        explanation: Snapshot isolation solo detecta conflictos de escritura sobre la misma fila, así que ambas confirman.
+      - id: b
+        text: Dirty read.
+        correct: false
+        explanation: No se leyó nada sin confirmar.
+      - id: c
+        text: Un deadlock.
+        correct: false
+        explanation: Nadie espera locks. Ambas confirman.
+  - id: ti-3
+    type: multiple-choice
+    prompt: ¿Qué afirmaciones sobre los niveles de aislamiento son verdaderas?
+    options:
+      - id: a
+        text: El mismo nombre de nivel puede comportarse distinto en motores distintos.
+        correct: true
+        explanation: El estándar fija garantías mínimas. El REPEATABLE READ de PostgreSQL, por ejemplo, es snapshot isolation y además previene phantoms.
+      - id: b
+        text: SERIALIZABLE puede abortar una transacción con un error de serialización, que la aplicación tiene que reintentar.
+        correct: true
+        explanation: Muchos motores detectan patrones peligrosos y abortan una transacción en vez de bloquear.
+      - id: c
+        text: READ COMMITTED previene los lost updates en una secuencia leer y luego escribir.
+        correct: false
+        explanation: Dos transacciones pueden leer el mismo valor confirmado y escribir las dos.
+      - id: d
+        text: Un nivel de aislamiento más alto nunca cuesta nada.
+        correct: false
+        explanation: Cuesta más bloqueos, abortos o reintentos, según el motor.
+  - id: ti-4
+    type: multiple-choice
+    prompt: La base de datos informa de un deadlock y aborta una de tus transacciones. ¿Qué debes hacer?
+    options:
+      - id: a
+        text: Reintentar la transacción abortada, y prevenirlo en el futuro bloqueando las filas en un orden consistente y manteniendo las transacciones cortas.
+        correct: true
+        explanation: El aborto es una señal normal. La víctima debe reintentarse, y el orden elimina el ciclo.
+      - id: b
+        text: Desactivar la detección de deadlocks para evitar los errores.
+        correct: false
+        explanation: Sin detección, las transacciones esperarían hasta un timeout de lock.
+      - id: c
+        text: Envolver todo en `synchronized`.
+        correct: false
+        explanation: Un lock local no coordina otros pods, y no arregla el orden de locks en la base de datos.
+
+  - id: ti-5
+    type: multiple-choice
+    prompt: La aplicación lee un contador, le suma 1 en Java y escribe `SET views = :valor`, en dos transacciones concurrentes con REPEATABLE READ. ¿Qué pasa en PostgreSQL y en MySQL InnoDB?
+    options:
+      - id: a
+        text: PostgreSQL aborta al segundo escritor con un error de serialización; MySQL deja confirmar a los dos y se pierde un incremento.
+        correct: true
+        explanation: La snapshot isolation de PostgreSQL detecta la actualización concurrente de la misma fila. El UPDATE de InnoDB escribe sobre la fila más reciente sin comprobar que la lectura del snapshot está obsoleta.
+      - id: b
+        text: Los dos motores pierden un incremento.
+        correct: false
+        explanation: PostgreSQL detecta este caso con REPEATABLE READ y lanza un error.
+      - id: c
+        text: Los dos lo evitan, porque REPEATABLE READ significa por definición que no hay lost updates.
+        correct: false
+        explanation: El estándar SQL no define los lost updates para ese nivel, y los motores difieren, como muestra MySQL.

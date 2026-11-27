@@ -1,0 +1,83 @@
+concept: pessimistic-locking
+challenges:
+  - id: pl-1
+    type: multiple-choice
+    prompt: "`SELECT ... FOR UPDATE` is executed on a connection in autocommit mode. How long is the row locked?"
+    options:
+      - id: a
+        text: Only until that statement finishes, because it is its own transaction.
+        correct: true
+        explanation: The lock lasts until the transaction ends. In autocommit every statement is a transaction, so the protection is gone before your check and update.
+      - id: b
+        text: Until the application closes the connection.
+        correct: false
+        explanation: Closing the connection is not what defines the lock lifetime. The transaction end does.
+      - id: c
+        text: Forever, until another session releases it.
+        correct: false
+        explanation: Locks are released at commit or rollback, never by another session.
+  - id: pl-2
+    type: multiple-choice
+    prompt: A transaction runs `SELECT ... FOR UPDATE` on an order and then calls the payment gateway, which takes 3 seconds. What is the problem?
+    options:
+      - id: a
+        text: The row stays locked and the connection is held during the whole call, so other requests queue and the pool can run out.
+        correct: true
+        explanation: Slow external work inside a lock multiplies waiting. Do the remote call outside the lock or use an approach that does not hold it.
+      - id: b
+        text: There is no problem, locks are free.
+        correct: false
+        explanation: Locks make others wait, and a held connection is a scarce resource.
+      - id: c
+        text: The gateway cannot be called inside a transaction at all.
+        correct: false
+        explanation: It is technically possible. It is just a bad idea for lock duration.
+  - id: pl-3
+    type: multiple-choice
+    prompt: What does `SELECT ... FOR UPDATE SKIP LOCKED` give you for a table used as a job queue?
+    options:
+      - id: a
+        text: Each worker takes a different unlocked job, without waiting for the others.
+        correct: true
+        explanation: Rows locked by other workers are skipped instead of waited for, which spreads the work.
+      - id: b
+        text: Every worker gets the same job, so it is processed several times.
+        correct: false
+        explanation: A locked row is exactly what SKIP LOCKED skips.
+      - id: c
+        text: It disables the locks.
+        correct: false
+        explanation: The rows it returns are locked as usual. It only avoids rows already locked.
+  - id: pl-4
+    type: multiple-choice
+    prompt: Transaction A locks rows 1 then 2. Transaction B locks rows 2 then 1. What can happen, and what avoids it?
+    options:
+      - id: a
+        text: A deadlock. Locking rows in the same order in every transaction avoids it.
+        correct: true
+        explanation: Each waits for the lock the other holds. A global order of acquisition removes the cycle.
+      - id: b
+        text: Nothing, the database runs them one after another.
+        correct: false
+        explanation: The database does not serialize them. They run concurrently and block each other.
+      - id: c
+        text: A lost update. Adding a version column avoids it.
+        correct: false
+        explanation: The problem is two transactions waiting for each other, not overwritten data.
+
+  - id: pl-5
+    type: multiple-choice
+    prompt: "In PostgreSQL, two transactions run `SELECT * FROM users WHERE email = 'a@x.com' FOR UPDATE`, find no row, and each inserts the user. What happens?"
+    options:
+      - id: a
+        text: Both inserts can succeed, because `FOR UPDATE` cannot lock a row that does not exist yet. A unique constraint is needed.
+        correct: true
+        explanation: Row locks need a row. For "only one may exist", the database has to enforce uniqueness.
+      - id: b
+        text: The second transaction waits, because the empty result is locked.
+        correct: false
+        explanation: PostgreSQL does not lock ranges for FOR UPDATE. MySQL's gap locks behave differently, which is exactly why engine details matter.
+      - id: c
+        text: The database rejects the second SELECT.
+        correct: false
+        explanation: Both SELECTs simply return no rows.

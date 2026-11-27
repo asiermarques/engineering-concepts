@@ -1,0 +1,81 @@
+---
+id: saga
+title: Saga
+topic: backend-concurrency
+order: 13
+learningObjective: Coordinar operaciones distribuidas mediante transacciones locales y compensaciones.
+summary: Una saga sustituye una transacción distribuida por una secuencia de transacciones locales, cada una con su acción compensatoria.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+Una transacción de base de datos no cubre automáticamente varias llamadas REST a microservicios distintos. Una compra que reserva stock, autoriza un pago y crea un pedido en tres servicios es el caso típico. Un checkout toca varios servicios: inventario, pagos, envíos. Cada uno es dueño de su base de datos, así que no hay una única transacción ACID entre ellos, y un two-phase commit distribuido es lento, acopla la disponibilidad y a menudo no está disponible entre servicios y terceros.
+
+Una **saga** es una secuencia de **transacciones locales**. Cada paso se confirma en su propio servicio. Si un paso posterior falla, la saga ejecuta **acciones compensatorias** de los pasos ya hechos.
+
+<StaticWalkthrough
+  caption="Saga de checkout: se reserva el stock, se cobra el pago y falla el envío, así que la saga compensa en orden inverso reembolsando el pago y liberando el stock."
+  columns={['Paso', 'Transacción local', 'Compensación si falla un paso posterior']}
+  rows={[
+    ['1', 'Reservar stock (inventario)', 'Liberar la reserva'],
+    ['2', 'Cobrar la tarjeta (pagos)', 'Reembolsar el pago'],
+    ['3', 'Crear el envío (envíos) → falla', 'Nada que deshacer; empezar a compensar los pasos 2 y 1'],
+    ['4', 'Compensar: reembolsar el pago', ''],
+    ['5', 'Compensar: liberar el stock, marcar el pedido CANCELLED', ''],
+  ]}
+/>
+
+## Una compensación no es un rollback
+
+Un rollback hace como si el cambio nunca hubiera ocurrido. Una compensación es una **nueva acción de negocio** que deshace semánticamente la anterior, y otros pueden haber visto el estado intermedio (el stock estuvo reservado un momento, la tarjeta se cobró y luego se reembolsó). No todo se puede compensar, como un email ya enviado, así que el orden de los pasos importa: deja para el final los pasos más difíciles de deshacer.
+
+```kotlin
+suspend fun checkout(order: Order) {
+    val done = ArrayDeque<suspend () -> Unit>()           // compensaciones de los pasos completados
+    try {
+        inventory.reserve(order);   done.addFirst { inventory.release(order) }
+        payments.charge(order);     done.addFirst { payments.refund(order) }
+        shipping.create(order)
+        orders.markConfirmed(order)
+    } catch (e: Exception) {
+        done.forEach { it() }                              // primero la más reciente
+        orders.markCancelled(order)
+    }
+}
+```
+
+## Paso pivote y orden de los pasos
+
+Los pasos se dividen en tres grupos: pasos **compensables** (se pueden deshacer), el **pivote** (una vez confirmado, la saga tiene que seguir adelante) y pasos **reintentables** posteriores (tienen que acabar teniendo éxito, así que solo se reintentan, nunca se compensan). Deja lo más difícil de deshacer lo más tarde posible.
+
+Los pagos dan un buen ejemplo: **autorizar** la tarjeta al principio (solo retiene los fondos, y anularla es barato y no deja cargo), y **capturar** al final, cuando el stock y el envío están confirmados. Compensar una autorización es mucho más limpio que reembolsar una captura. Las autorizaciones caducan tras algunos días, lo que limita cuánto puede esperar la saga.
+
+## Vivir sin aislamiento
+
+Otras peticiones pueden ver estados intermedios, así que las sagas usan contramedidas:
+
+- **Semantic lock**: marcar el pedido como `PENDING` para que otras operaciones sepan que está en curso y no actúen sobre él.
+- **Actualizaciones conmutativas**: diseñar pasos como «sumar 100» y «restar 100» para que su orden no importe.
+- **Releer antes de actuar**: comprobar que el estado no ha cambiado antes de que un paso lo sobrescriba (comprobación optimistic).
+
+## Requisitos de los pasos
+
+- Los pasos y las compensaciones deben ser **idempotentes**: se reintentarán tras caídas y timeouts.
+- Las compensaciones deben poder **terminar teniendo éxito**, así que se reintentan hasta lograrlo.
+- El estado de la saga debe **persistirse** para que un coordinador caído pueda continuar.
+- Publica los eventos de forma **fiable** con el patrón **outbox**: escribe el evento en la misma transacción local que el cambio de estado, y un relay lo publica. Los consumidores deduplican con un **inbox**.
+
+Una saga tampoco da el aislamiento de una transacción tradicional: otras operaciones pueden observar estados intermedios. Si además usas mensajería, conviene conocer **Transactional Outbox** e **Inbox** para publicar eventos de forma fiable y procesar mensajes duplicados.
+
+## Outbox y compensaciones fallidas en la práctica
+
+- El relay del outbox **consulta periódicamente** la tabla outbox o **lee el log de transacciones** (change data capture, por ejemplo con Debezium). En ambos casos la entrega es al menos una vez, así que los consumidores deben deduplicar.
+- Una compensación también puede fallar. Reintenta con backoff; si sigue fallando, apártala (por ejemplo en una dead-letter queue) y avisa, porque puede que tenga que resolverla una persona. Registra el estado de cada saga para que eso sea visible.
+
+## Orquestación y coreografía
+
+| | Orquestación | Coreografía |
+| --- | --- | --- |
+| Control | Un coordinador indica a cada servicio qué hacer | Cada servicio reacciona a los eventos de los demás |
+| Flujo visible | En un solo sitio | Repartido entre servicios |
+| Acoplamiento | Los servicios conocen al coordinador | Los servicios conocen los eventos de los demás |
+| Riesgo | El coordinador se vuelve una pieza central | Dependencias cíclicas y flujos difíciles de seguir |

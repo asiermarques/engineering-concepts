@@ -1,0 +1,91 @@
+---
+id: race-condition
+title: Race condition
+topic: backend-concurrency
+order: 1
+learningObjective: Explicar por qué leer, comprobar y escribir no es seguro.
+summary: Dos peticiones se intercalan entre la comprobación y la escritura, y el resultado depende del momento.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+Una **race condition** ocurre cuando el resultado depende del orden en que se intercalan operaciones concurrentes. La forma clásica es **leer → comprobar → escribir** (check-then-act): cada paso es correcto por separado, pero nada impide que otra petición se ejecute entre ellos.
+
+## Check-then-act sobre el stock
+
+```java
+int stock = database.getStock(productId);
+
+if (stock > 0) {
+    database.setStock(productId, stock - 1);
+    createOrder();
+}
+```
+
+Parece correcto, pero leer, comprobar y escribir son **tres operaciones distintas**, y otra petición puede intervenir entre ellas: dos peticiones leen stock 1, las dos pasan `stock > 0` y se crean dos pedidos para una sola unidad.
+
+## Un pago duplicado
+
+```java
+Order order = orders.findById(orderId);          // 1. leer
+if (order.getStatus() == Status.PENDING) {       // 2. comprobar
+    gateway.charge(order.getTotal());            // 3. actuar
+    order.setStatus(Status.PAID);                // 4. escribir
+    orders.save(order);
+}
+```
+
+El cliente hace doble clic en «Pagar», o un cliente móvil reintenta tras un timeout:
+
+```http
+POST /orders/42/pay HTTP/1.1
+POST /orders/42/pay HTTP/1.1
+```
+
+<StaticWalkthrough
+  caption="Dos peticiones pagan el mismo pedido: ambas leen PENDING antes de que ninguna escriba PAID, así que se cobra dos veces al cliente."
+  columns={['Petición A', 'Petición B', 'Estado del pedido en la base de datos']}
+  rows={[
+    ['lee el pedido 42 → PENDING', '', 'PENDING'],
+    ['', 'lee el pedido 42 → PENDING', 'PENDING'],
+    ['comprueba: PENDING, se puede cobrar', '', 'PENDING'],
+    ['', 'comprueba: PENDING, se puede cobrar', 'PENDING'],
+    ['cobra la tarjeta', '', 'PENDING'],
+    ['', 'cobra la tarjeta', 'PENDING'],
+    ['escribe PAID', 'escribe PAID', 'PAID (cobrado dos veces)'],
+  ]}
+/>
+
+## Lost update
+
+El mismo intercalado corrompe cualquier lectura-modificación-escritura, como un contador de stock:
+
+```kotlin
+val stock = repository.stockOf(productId)   // las dos leen 10
+repository.save(productId, stock - 1)       // las dos escriben 9: una unidad «desaparece»
+```
+
+| Síntoma | Causa | Ejemplo |
+| --- | --- | --- |
+| Efecto duplicado | Comprobar y actuar son pasos separados | Dos cobros por un pedido |
+| Lost update | Read-modify-write sobre estado compartido | El stock pasa de 10 a 9 tras dos ventas |
+| Decisión inconsistente | Decisión basada en datos que cambiaron entretanto | Vender stock que ya no existe |
+
+## Lo que no lo arregla
+
+- **Comprobar más veces** solo reduce la ventana; no la cierra.
+- **Ejecutar un solo pod** esconde el problema hasta que escalas o sube la carga.
+- **Que los tests pasen** prueba poco: las carreras dependen del timing y rara vez aparecen en un test de un solo hilo.
+
+Los siguientes conceptos cierran la ventana con un mecanismo distinto cada uno: una sentencia atómica, un lock local, versionado, locks de fila, claves de idempotencia y locks distribuidos.
+
+## Dónde se esconden las carreras
+
+- **Comprobaciones de unicidad**: un `SELECT ... WHERE email = ?` antes del `INSERT` deja pasar dos registros con el mismo email. Solo una restricción de unicidad lo cierra.
+- **Reintentos**: un cliente o un broker de mensajes que repite una petición es otro escritor concurrente.
+- **Tareas programadas**: un cron se ejecuta en todos los pods salvo que algo lo coordine.
+- **Cachés**: dos peticiones fallan a la vez en la caché y ambas recalculan y escriben (un cache stampede).
+- **Time-of-check to time-of-use (TOCTOU)**: cualquier decisión basada en un valor que puede cambiar antes de actuar sobre él.
+
+## Hacerlas visibles en los tests
+
+Una carrera casi nunca aparece en un test normal. Lanza muchas peticiones en el mismo instante (por ejemplo, liberando N hilos con un `CountDownLatch`), repite el test muchas veces y ejecútalo contra el motor de base de datos real (por ejemplo con Testcontainers) en vez de un sustituto en memoria que no bloquea como producción. Después comprueba el invariante: un solo cobro, el stock nunca negativo.

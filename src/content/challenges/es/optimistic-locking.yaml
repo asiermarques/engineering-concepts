@@ -1,0 +1,83 @@
+concept: optimistic-locking
+challenges:
+  - id: ol-1
+    type: multiple-choice
+    prompt: "`UPDATE accounts SET balance = ?, version = version + 1 WHERE id = ? AND version = ?` afecta a 0 filas. ¿Qué debe hacer el código?"
+    options:
+      - id: a
+        text: Tratarlo como un conflicto, recargar la fila y reintentar un número acotado de veces, o responder 409.
+        correct: true
+        explanation: Cero filas significa que otro escritor cambió la versión. Los datos sobre los que decidiste están desactualizados.
+      - id: b
+        text: Ignorarlo, el saldo se actualizó igualmente.
+        correct: false
+        explanation: No se escribió nada. Ignorarlo en silencio pierde el cambio del usuario.
+      - id: c
+        text: Ejecutar de nuevo la misma actualización sin recargar.
+        correct: false
+        explanation: La versión del `WHERE` está desactualizada, así que fallaría siempre.
+  - id: ol-2
+    type: multiple-choice
+    prompt: ¿Cuándo encaja bien el optimistic locking?
+    options:
+      - id: a
+        text: Los conflictos son raros, por ejemplo usuarios que editan su propio perfil.
+        correct: true
+        explanation: Los reintentos son raros, así que no tener locks es una ganancia pura.
+      - id: b
+        text: Miles de peticiones actualizan la misma fila caliente, como un contador global.
+        correct: false
+        explanation: La mayoría de intentos fallarían y se reintentarían, desperdiciando trabajo. Encajan mejor una actualización atómica o un lock pessimistic.
+      - id: c
+        text: Siempre es mejor porque nunca espera.
+        correct: false
+        explanation: No esperar se paga con trabajo desperdiciado bajo contención.
+  - id: ol-3
+    type: multiple-choice
+    prompt: "Un cliente envía `PUT /accounts/7` con `If-Match: \"3\"` pero el `ETag` actual es `\"4\"`. ¿Qué debe responder el servidor?"
+    options:
+      - id: a
+        text: 412 Precondition Failed
+        correct: true
+        explanation: La precondición expresada con `If-Match` no se cumple, así que la escritura no debe aplicarse.
+      - id: b
+        text: 200 OK, aplicando la actualización igualmente.
+        correct: false
+        explanation: Eso anularía la comprobación de versión y sobrescribiría el cambio más reciente.
+      - id: c
+        text: 404 Not Found
+        correct: false
+        explanation: El recurso existe. El problema es una versión obsoleta, no un recurso inexistente.
+  - id: ol-4
+    type: multiple-choice
+    prompt: ¿Qué afirmaciones sobre el optimistic locking son verdaderas?
+    options:
+      - id: a
+        text: No mantiene locks de base de datos mientras el usuario o la aplicación piensan.
+        correct: true
+        explanation: La comprobación solo la hace la actualización condicional.
+      - id: b
+        text: El conflicto se detecta al escribir, no al leer.
+        correct: true
+        explanation: Leer es gratis. Solo el `WHERE version = ?` de la escritura revela el conflicto.
+      - id: c
+        text: Reintentar siempre es seguro, sea lo que sea lo que hizo el código antes de la actualización.
+        correct: false
+        explanation: Si el código ya causó efectos externos, como cobrar una tarjeta, reintentar los repite salvo que sean idempotentes.
+
+  - id: ol-5
+    type: multiple-choice
+    prompt: "`PUT /products/123` carga la entidad (con `@Version`), copia sobre ella el body y la guarda. El cliente nunca envía una versión. ¿Qué protege la comprobación de versión?"
+    options:
+      - id: a
+        text: Solo los pocos milisegundos de esa petición, no el tiempo que el usuario pasó editando, así que las ediciones de dos usuarios se pueden seguir pisando.
+        correct: true
+        explanation: La versión que se compara es la leída en la misma petición. El cliente debe enviar la versión que vio, por ejemplo con `If-Match`.
+      - id: b
+        text: Toda la sesión de edición del usuario.
+        correct: false
+        explanation: Nada vincula la actualización con lo que vio el usuario al empezar a editar.
+      - id: c
+        text: Nada en absoluto, `@Version` solo funciona con locks pessimistic.
+        correct: false
+        explanation: Es el mecanismo optimistic. Aquí simplemente comprueba la ventana equivocada.

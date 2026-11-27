@@ -1,0 +1,93 @@
+---
+id: pessimistic-locking
+title: Pessimistic locking
+topic: backend-concurrency
+order: 5
+learningObjective: Explicar SELECT FOR UPDATE y el coste de mantener bloqueos.
+summary: Bloquea las filas que vas a cambiar, haz el trabajo y confirma; los demás esperan.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+El **pessimistic locking** asume que los conflictos ocurrirán y los evita bloqueando antes las filas. En SQL la herramienta es `SELECT ... FOR UPDATE`, que bloquea las filas seleccionadas **hasta que termina la transacción**.
+
+```sql
+BEGIN;
+SELECT status, total FROM orders WHERE id = 42 FOR UPDATE;   -- bloquea la fila
+-- la aplicación comprueba el estado y decide
+UPDATE orders SET status = 'PAID' WHERE id = 42;
+COMMIT;                                                       -- libera el lock
+```
+
+<StaticWalkthrough
+  caption="Con SELECT FOR UPDATE la segunda transacción espera a que la primera confirme, lee el nuevo estado y se detiene."
+  columns={['Transacción A', 'Transacción B', 'Fila 42']}
+  rows={[
+    ['BEGIN; SELECT ... FOR UPDATE → PENDING', '', 'bloqueada por A'],
+    ['', 'BEGIN; SELECT ... FOR UPDATE → espera', 'bloqueada por A'],
+    ['UPDATE status = PAID; COMMIT', '', 'PAID, desbloqueada'],
+    ['', 'el SELECT devuelve: PAID → no cobra', 'PAID'],
+  ]}
+/>
+
+```java
+@Transactional
+public void pay(long orderId) {
+    Order order = em.find(Order.class, orderId, LockModeType.PESSIMISTIC_WRITE); // FOR UPDATE
+    if (order.getStatus() != Status.PENDING) return;
+    order.setStatus(Status.PAID);
+}
+```
+
+```kotlin
+@Query("SELECT o FROM Order o WHERE o.id = :id")
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+fun findForPayment(id: Long): Order?
+```
+
+`FOR UPDATE` toma un lock sobre la fila que la protege frente a otras escrituras y locks incompatibles hasta que termina la transacción. La segunda petición espera hasta que la primera libera el lock; después puede leer el estado actualizado o, según el nivel de aislamiento, tener que reintentar su transacción. Una lectura normal sin `FOR UPDATE` no queda necesariamente bloqueada: depende del motor y de su modelo de concurrencia.
+
+## Una mala práctica
+
+1. Abrir una transacción.
+2. Bloquear una fila de la base de datos.
+3. Llamar a un proveedor de pagos por REST.
+4. Esperar varios segundos.
+5. Actualizar la fila.
+6. Confirmar la transacción.
+
+Durante toda la llamada externa mantienes ocupado el lock, y normalmente también una conexión a la base de datos.
+
+## Optimistic frente a pessimistic
+
+| | Optimistic | Pessimistic |
+| --- | --- | --- |
+| Estrategia | Detectar conflictos | Prevenir modificaciones incompatibles |
+| Momento | Al actualizar | Antes de operar |
+| Ante un conflicto | Rechaza la actualización | Normalmente espera |
+| Baja contención | Muy adecuado | Puede ser innecesario |
+| Alta contención | Muchos reintentos | Puede reducir el trabajo desperdiciado |
+| Riesgo | Exceso de reintentos | Bloqueos y deadlocks |
+
+## Qué cuesta mantener locks
+
+| Coste | Por qué duele |
+| --- | --- |
+| Esperas | Otras transacciones sobre las mismas filas hacen cola detrás de la tuya. |
+| Transacciones largas | El trabajo lento dentro de la transacción alarga la espera de todos. |
+| Agotamiento del pool | Una transacción conserva su conexión; las peticiones en espera se acumulan. |
+| Deadlocks | Dos transacciones que bloquean filas en orden opuesto se esperan mutuamente. |
+
+Reglas prácticas:
+
+- **Bloquea solo las filas necesarias** y mantén la transacción corta.
+- **No llames a servicios externos** (una pasarela de pago) mientras mantienes un lock de fila.
+- **Bloquea las filas en un orden consistente** para evitar deadlocks.
+- `FOR UPDATE` solo funciona dentro de una transacción. En modo autocommit el lock se libera en cuanto termina la sentencia.
+- `NOWAIT` falla de inmediato si la fila está bloqueada, y `SKIP LOCKED` salta las filas bloqueadas, lo que sirve para workers que consumen una cola de trabajos.
+
+## Detalles que conviene conocer
+
+- **No se puede bloquear una fila que no existe.** `SELECT ... WHERE email = ? FOR UPDATE` no devuelve nada y no bloquea nada en PostgreSQL, así que dos transacciones pueden insertar. Usa una restricción de unicidad (o bloquea una fila padre que siempre exista). MySQL InnoDB con REPEATABLE READ toma en su lugar *gap locks* sobre el rango vacío, que bloquean las inserciones pero son una fuente clásica de deadlocks cuando dos transacciones hacen «select for update y luego insert».
+- **Acota la espera**: `SET LOCAL lock_timeout = '2s'` en PostgreSQL, `innodb_lock_wait_timeout` en MySQL, o la pista de JPA `jakarta.persistence.lock.timeout`. Sin ello, una petición puede esperar mucho más que su propio timeout.
+- **Modos de lock más débiles**: `FOR SHARE` deja que otros lectores también bloqueen la fila pero bloquea a los escritores; en PostgreSQL `FOR NO KEY UPDATE` no bloquea las inserciones de filas que la referencian por clave foránea, cosa que `FOR UPDATE` sí hace.
+- **Los locks siguen a la transacción, no al código**: una relación con carga perezosa o una consulta extra pueden bloquear más filas de las que crees. Lee el SQL que genera tu ORM.

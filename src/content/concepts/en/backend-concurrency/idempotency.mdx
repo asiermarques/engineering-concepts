@@ -1,0 +1,99 @@
+---
+id: idempotency
+title: Idempotency
+topic: backend-concurrency
+order: 6
+learningObjective: Implement a persistent key, uniqueness and recovery after failures.
+summary: Make a retried request produce the same effect as the first one by recording its key in the database.
+---
+
+An operation is **idempotent** when running it several times has the same effect as running it once. In payments this is what makes retries safe: after a timeout the client cannot know whether the first attempt worked.
+
+HTTP defines `GET`, `PUT` and `DELETE` as idempotent, but `POST /payments` is not, and `UPDATE accounts SET balance = balance - 10` is not either. The client sends an **idempotency key** to make a `POST` safe to retry:
+
+```http
+POST /payments HTTP/1.1
+Idempotency-Key: 8b1f6c8e-5d0a-4a3e-9e7c-3f2b1c0d9a11
+Content-Type: application/json
+
+{"orderId": 42, "amount": 100}
+```
+
+## Persistent key with a uniqueness constraint
+
+```sql
+CREATE TABLE idempotency_keys (
+    merchant_id   VARCHAR(100),
+    operation     VARCHAR(50),
+    key           VARCHAR(100),
+    request_hash  VARCHAR(100) NOT NULL,
+    status        VARCHAR(20) NOT NULL,   -- PROCESSING | COMPLETED
+    response      JSONB,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at    TIMESTAMPTZ,
+    PRIMARY KEY (merchant_id, operation, key)   -- unique within its scope
+);
+
+INSERT INTO idempotency_keys (merchant_id, operation, key, request_hash, status)
+VALUES ('merchant-1', 'payment', '8b1f...', 'sha256-of-body', 'PROCESSING')
+ON CONFLICT DO NOTHING;      -- 1 row inserted → you own the key; 0 → it already exists
+```
+
+The **unique constraint** is the mechanism. The key must be unique within its scope, for example per merchant and operation type. A `SELECT` to see whether the key exists followed by an `INSERT` would be a race condition again: two simultaneous requests could both see that the key does not exist yet. The hash checks that the client is not accidentally reusing the key for a different operation.
+
+```java
+if (keys.tryInsert(key, requestHash)) {
+    PaymentResponse response = payments.charge(request);   // first time
+    keys.complete(key, response);
+    return response;
+}
+IdempotencyRecord existing = keys.find(key);
+if (!existing.requestHash().equals(requestHash)) throw new KeyReuseException();   // 422
+if (existing.isCompleted()) return existing.response();                           // replay
+throw new RequestInProgressException();                                           // 409, retry later
+```
+
+## Recovery after failures
+
+| Situation | What to do |
+| --- | --- |
+| Same key, same body, completed | Return the stored response without executing again |
+| Same key, same body, still `PROCESSING` | Answer 409 and let the client retry later |
+| Same key, different body | Reject: the key is being reused for another request |
+| Process crashed with the key `PROCESSING` | Do **not** delete it and charge again; find out what happened first (see below) |
+| Calling an external provider | Pass your key (or a derived one) so the provider deduplicates too |
+
+Store the key and the business change in the **same transaction** when both live in your database. For external effects, idempotency on the provider side closes the gap that a transaction cannot.
+
+## What if the payment succeeds but the service crashes before saving COMPLETED?
+
+This question separates a basic implementation from a robust one. The key is registered as `PROCESSING`, the provider charges the customer, the service crashes and the result is never stored. When it recovers, you do not necessarily know whether the payment happened.
+
+- **If the whole operation is local**, store the business effect and the idempotency result in the **same database transaction**.
+- **If there is an external provider**, a local transaction cannot undo or confirm a payment made by another system. Combine mechanisms:
+  - Propagate a stable idempotency key to the PSP.
+  - Persist the operation identifier **before** calling the provider.
+  - Query the transaction status at the PSP.
+  - Implement reconciliation and recovery of incomplete operations.
+  - Control how records stuck in `PROCESSING` are recovered.
+
+Never delete a key that has been in `PROCESSING` for a long time and charge again without checking what happened.
+
+## Design details
+
+- **One key per logical operation, not per attempt.** The client generates the key (for example a UUID v4) once, before the first attempt, and reuses it in every retry. A new key per retry defeats the whole mechanism.
+- **A natural key is often simpler.** If there can only be one payment per order, a unique constraint on `payments(order_id)` already makes the operation idempotent without a separate table.
+- **Store deterministic outcomes, not transient ones.** Replaying a validation error (`400`, `422`) is fine. Storing a transient failure (a provider timeout) as the final answer would stop a later retry from ever succeeding; leave those so the operation can be resumed or reconciled.
+- **Keys live for a window** (often around 24 hours). A retry after the key expired is a new request, so the window must cover how long clients realistically retry.
+- **Consumers need it too**: a message broker delivers at least once, so a consumer records processed message ids with a unique constraint in the same transaction as its effect (the *inbox*, see Saga).
+- There is an IETF draft standardizing the `Idempotency-Key` header; follow it when designing a public API.
+
+## Redis
+
+```
+SET payment:abc-123 processing NX EX 3600
+```
+
+`NX` sets the key only if it does not exist, and `EX` sets an expiry. It is atomic, but for critical payments prefer a **persistent record** with states and strong enough recovery guarantees: a temporary Redis key is not, by itself, a guarantee against duplicate charges.
+
+**Interview point:** idempotency does not necessarily mean executing the code exactly once. It means guaranteeing that repeating the operation does not produce unwanted additional effects.

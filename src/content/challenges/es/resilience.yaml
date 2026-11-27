@@ -1,0 +1,82 @@
+concept: resilience
+challenges:
+  - id: rs-1
+    type: multiple-choice
+    prompt: "`POST /charges` al proveedor de pagos vence su timeout tras 2 segundos. ¿Qué puedes concluir?"
+    options:
+      - id: a
+        text: Nada con certeza. El cobro puede haber tenido éxito, así que los reintentos necesitan una clave de idempotencia o una consulta de estado.
+        correct: true
+        explanation: Un timeout solo dice que dejaste de esperar. El resultado en el lado remoto es desconocido.
+      - id: b
+        text: El cobro no se produjo, así que reintentar siempre es seguro.
+        correct: false
+        explanation: Reintentar sin clave de idempotencia podría cobrar dos veces.
+      - id: c
+        text: El proveedor está caído.
+        correct: false
+        explanation: Puede estar lento, o la respuesta puede haberse perdido.
+  - id: rs-2
+    type: multiple-choice
+    prompt: 1000 clientes reintentan de inmediato y sin límite cuando un servicio falla. ¿Cuál es el resultado probable?
+    options:
+      - id: a
+        text: Una retry storm que multiplica la carga sobre un servicio que ya va mal y retrasa su recuperación.
+        correct: true
+        explanation: El backoff con jitter y un número acotado de intentos reparten los reintentos en el tiempo.
+      - id: b
+        text: El servicio se recupera antes porque recibe más peticiones.
+        correct: false
+        explanation: Más carga sobre un servicio con problemas lo empeora.
+      - id: c
+        text: Nada, los reintentos son gratis.
+        correct: false
+        explanation: Cada reintento consume recursos del servidor.
+  - id: rs-3
+    type: multiple-choice
+    prompt: Una dependencia falla el 90 % de sus llamadas. ¿Qué hace un circuit breaker abierto?
+    options:
+      - id: a
+        text: Hace fallar las llamadas de inmediato sin llamar a la dependencia, y luego deja pasar unas pocas pruebas (half-open) para ver si se recuperó.
+        correct: true
+        explanation: Fallar rápido ahorra recursos al llamante y da margen a la dependencia para recuperarse.
+      - id: b
+        text: Reintenta cada llamada 10 veces.
+        correct: false
+        explanation: Eso es comportamiento de retry, y añadiría carga.
+      - id: c
+        text: Limita a los clientes a un número de peticiones por segundo.
+        correct: false
+        explanation: Eso describe el rate limiting.
+  - id: rs-4
+    type: multiple-choice
+    prompt: ¿Qué afirmaciones distinguen correctamente rate limiting y backpressure?
+    options:
+      - id: a
+        text: El rate limiting rechaza peticiones por encima de una política, típicamente con 429.
+        correct: true
+        explanation: El servidor impone un límite a lo que acepta.
+      - id: b
+        text: El backpressure indica a los productores que vayan más despacio, por ejemplo mediante una cola acotada, en vez de almacenar sin límite.
+        correct: true
+        explanation: El límite se comunica hacia atrás para que el trabajo no se acumule en memoria.
+      - id: c
+        text: Son el mismo patrón con dos nombres.
+        correct: false
+        explanation: Resuelven cosas distintas, rechazar el exceso frente a ralentizar el origen.
+  - id: rs-5
+    type: multiple-choice
+    prompt: ¿Qué consigue un bulkhead?
+    options:
+      - id: a
+        text: Una dependencia lenta solo puede agotar su propio conjunto de recursos, no los que usan otras dependencias.
+        correct: true
+        explanation: Aislar recursos contiene el fallo en un compartimento.
+      - id: b
+        text: Las llamadas fallidas se reintentan automáticamente.
+        correct: false
+        explanation: Eso es un retry.
+      - id: c
+        text: Las llamadas se cancelan tras una duración máxima.
+        correct: false
+        explanation: Eso es un timeout.

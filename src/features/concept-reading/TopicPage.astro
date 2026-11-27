@@ -1,0 +1,46 @@
+---
+import { render } from 'astro:content';
+import { entryLocale, loadContent } from '../content-validation/loadContent';
+import { ui, type Locale } from '../../i18n/ui';
+import Layout from './Layout.astro';
+import { sortConcepts } from './navigation';
+
+interface Props {
+  locale: Locale;
+  /** Where the English page lives: `/` serves English too (FR-010). */
+  alternates: Record<Locale, string>;
+}
+const { locale, alternates } = Astro.props;
+const t = ui[locale];
+
+const content = await loadContent();
+const topics = content.topics.filter((topic) => entryLocale(topic.id) === locale);
+const topic = topics[0];
+if (!topic) throw new Error(`No topic found for locale "${locale}"`);
+const { Content } = await render(topic);
+const concepts = sortConcepts(
+  content.concepts.filter((c) => entryLocale(c.id) === locale && c.data.topic === topic.data.id).map((c) => ({ ...c, order: c.data.order })),
+);
+---
+
+<Layout locale={locale} title={topic.data.title} description={topic.data.summary} alternates={alternates}>
+  <h1>{topic.data.title}</h1>
+  <div class="prose">
+    <Content />
+  </div>
+  <h2 class="section-title">{t.topicConcepts}</h2>
+  <ol class="concept-list" data-testid="concept-list">
+    {
+      concepts.map((concept) => (
+        <li>
+          <h2>
+            <a href={`/${locale}/concepts/${concept.data.id}/`}>{concept.data.title}</a>
+          </h2>
+          <p class="concept-list__objective">
+            <strong>{t.learningObjective}:</strong> {concept.data.learningObjective}
+          </p>
+        </li>
+      ))
+    }
+  </ol>
+</Layout>

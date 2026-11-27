@@ -1,0 +1,83 @@
+concept: distributed-locking
+challenges:
+  - id: dl-1
+    type: multiple-choice
+    prompt: ¿Por qué cada adquisición del lock guarda un token de propietario único y por qué la liberación se hace con un script de comparar y borrar?
+    options:
+      - id: a
+        text: Para que un titular solo borre su propio lock y nunca uno que caducó y fue adquirido por otro.
+        correct: true
+        explanation: Un `DEL` simple tras la caducidad podría eliminar el lock válido de otro pod. La comparación del token hace segura la liberación, y el script hace atómicos comparar y borrar.
+      - id: b
+        text: Para que el lock dure para siempre.
+        correct: false
+        explanation: Los locks son leases y caducan por diseño. El token no cambia eso.
+      - id: c
+        text: Porque Redis necesita un valor distinto para cada clave.
+        correct: false
+        explanation: Redis no exige valores únicos. El token resuelve un problema de propiedad.
+  - id: dl-2
+    type: multiple-choice
+    prompt: El pod A tiene un lease, se detiene más que el TTL y luego se reanuda y escribe. El pod B adquirió el lock entretanto. ¿Cómo evitas la escritura obsoleta de A?
+    options:
+      - id: a
+        text: El recurso comprueba un fencing token monótonamente creciente y rechaza el más antiguo.
+        correct: true
+        explanation: El pod A no puede saber que su lease caducó. Solo el recurso puede rechazar una escritura con un token más antiguo.
+      - id: b
+        text: El pod A comprueba `if (lockHeld)` justo antes de escribir.
+        correct: false
+        explanation: La pausa puede ocurrir justo después de la comprobación. Es una race condition otra vez.
+      - id: c
+        text: Usar un TTL más largo para que nunca caduque.
+        correct: false
+        explanation: Un TTL más largo hace menos probable la caducidad pero no imposible, y retrasa la recuperación de un titular caído.
+  - id: dl-3
+    type: multiple-choice
+    prompt: ¿Qué compromiso tiene un TTL de lock muy corto?
+    options:
+      - id: a
+        text: Un titular que hace trabajo lento puede perder el lock mientras sigue ejecutándose, y dos pods pueden trabajar a la vez.
+        correct: true
+        explanation: Si el procesamiento tarda más que el lease, se pierde la exclusión. Por eso hacen falta fencing tokens o renovación.
+      - id: b
+        text: Un titular caído bloquea a todos durante mucho tiempo.
+        correct: false
+        explanation: Ese es el problema de un TTL largo, no de uno corto.
+      - id: c
+        text: No hay compromiso, cuanto más corto mejor.
+        correct: false
+        explanation: Los TTL cortos caducan durante el trabajo lento.
+  - id: dl-4
+    type: multiple-choice
+    prompt: "Dos pods no deben poner ambos un pedido en PAID. ¿Qué mecanismo suele ser el más sencillo que basta?"
+    options:
+      - id: a
+        text: "`UPDATE orders SET status = 'PAID' WHERE id = ? AND status = 'PENDING'`, comprobando las filas afectadas."
+        correct: true
+        explanation: El invariante vive en una fila de la base de datos, así que una actualización condicional atómica da la garantía sin ningún lease que caduque.
+      - id: b
+        text: Un lock de Redis con TTL de 5 segundos y ninguna otra comprobación.
+        correct: false
+        explanation: Añade una pieza móvil que puede caducar a mitad de operación y deja igualmente una carrera en la escritura de la base de datos.
+      - id: c
+        text: Ejecutar un solo pod y evitar escalar.
+        correct: false
+        explanation: Sacrifica disponibilidad por una garantía que la base de datos podría dar gratis.
+
+  - id: dl-5
+    type: multiple-choice
+    prompt: Un cliente adquiere un lock con `SET NX` en un primario de Redis. El primario cae antes de replicar la clave y se promueve una réplica. ¿Qué puede pasar?
+    options:
+      - id: a
+        text: El nuevo primario no tiene el lock, así que un segundo cliente puede adquirirlo mientras el primero sigue creyendo que lo tiene.
+        correct: true
+        explanation: La replicación es asíncrona, así que una escritura confirmada se puede perder en un failover. La corrección sigue necesitando fencing tokens o un almacén respaldado por consenso.
+      - id: b
+        text: Nada, Redis replica de forma síncrona antes de confirmar.
+        correct: false
+        explanation: Por defecto Redis confirma antes de que las réplicas tengan la escritura.
+      - id: c
+        text: El lock se transfiere automáticamente a la nueva sesión del primer cliente.
+        correct: false
+        explanation: No existe ese mecanismo. La réplica promovida simplemente nunca vio la clave.

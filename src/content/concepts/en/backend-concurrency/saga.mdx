@@ -1,0 +1,81 @@
+---
+id: saga
+title: Saga
+topic: backend-concurrency
+order: 13
+learningObjective: Coordinate distributed operations with local transactions and compensations.
+summary: A saga replaces one distributed transaction with a sequence of local transactions, each with a compensating action.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+A database transaction does not automatically cover several REST calls to different microservices. A purchase that reserves stock, authorizes a payment and creates an order in three services is the typical case. A checkout touches several services: inventory, payments, shipping. Each owns its database, so there is no single ACID transaction across them, and a distributed two-phase commit is slow, couples availability and is often unavailable across services and third parties.
+
+A **saga** is a sequence of **local transactions**. Each step commits in its own service. If a later step fails, the saga runs **compensating actions** for the steps already done.
+
+<StaticWalkthrough
+  caption="Checkout saga: stock is reserved, the payment is charged and the shipment fails, so the saga compensates in reverse order by refunding the payment and releasing the stock."
+  columns={['Step', 'Local transaction', 'Compensation if a later step fails']}
+  rows={[
+    ['1', 'Reserve stock (inventory)', 'Release the reservation'],
+    ['2', 'Charge the card (payments)', 'Refund the payment'],
+    ['3', 'Create the shipment (shipping) → fails', 'Nothing to undo; start compensating steps 2 and 1'],
+    ['4', 'Compensate: refund the payment', ''],
+    ['5', 'Compensate: release the stock, mark the order CANCELLED', ''],
+  ]}
+/>
+
+## A compensation is not a rollback
+
+A rollback makes it as if the change never happened. A compensation is a **new business action** that semantically undoes the earlier one, and others may have seen the intermediate state (the stock was briefly reserved, the card was charged and then refunded). Not everything can be compensated, such as an email already sent, so the order of steps matters: put the steps that are hardest to undo last.
+
+```kotlin
+suspend fun checkout(order: Order) {
+    val done = ArrayDeque<suspend () -> Unit>()           // compensations of completed steps
+    try {
+        inventory.reserve(order);   done.addFirst { inventory.release(order) }
+        payments.charge(order);     done.addFirst { payments.refund(order) }
+        shipping.create(order)
+        orders.markConfirmed(order)
+    } catch (e: Exception) {
+        done.forEach { it() }                              // newest first
+        orders.markCancelled(order)
+    }
+}
+```
+
+## Pivot step and the order of steps
+
+Steps fall into three groups: **compensatable** steps (they can be undone), the **pivot** (once it commits, the saga must go forward) and **retriable** steps after it (they must eventually succeed, so they are only retried, never compensated). Put the hardest to undo as late as possible.
+
+Payments give a good example: **authorize** the card early (it only holds the funds, and a void is cheap and leaves no charge), and **capture** at the end, when stock and shipment are confirmed. Compensating an authorization is far cleaner than refunding a capture. Authorizations expire after some days, which bounds how long the saga can wait.
+
+## Living without isolation
+
+Other requests can see intermediate states, so sagas use countermeasures:
+
+- **Semantic lock**: mark the order `PENDING` so other operations know it is in flight and do not act on it.
+- **Commutative updates**: design steps such as "add 100" and "subtract 100" so their order does not matter.
+- **Reread before acting**: verify the state has not changed before a step overwrites it (optimistic check).
+
+## Requirements for the steps
+
+- Steps and compensations must be **idempotent**: they will be retried after crashes and timeouts.
+- Compensations must be able to **succeed eventually**, so they are retried until they do.
+- The saga state must be **persisted** so a crashed coordinator can continue.
+- Publish events **reliably** with the **outbox** pattern: write the event in the same local transaction as the state change, and a relay publishes it. Consumers deduplicate with an **inbox**.
+
+A saga does not give the isolation of a traditional transaction either: other operations can observe intermediate states. When messaging is involved, know **Transactional Outbox** and **Inbox** to publish events reliably and process duplicate messages.
+
+## Outbox and failed compensations in practice
+
+- The outbox relay either **polls** the outbox table or **tails the transaction log** (change data capture, for example with Debezium). Either way delivery is at least once, so consumers must deduplicate.
+- A compensation can fail too. Retry it with backoff; if it still fails, park it (for example in a dead-letter queue) and alert, because a human may have to resolve it. Record every saga's state so that is visible.
+
+## Orchestration and choreography
+
+| | Orchestration | Choreography |
+| --- | --- | --- |
+| Control | A coordinator tells each service what to do | Each service reacts to events from the others |
+| Flow visible | In one place | Spread across services |
+| Coupling | Services know the coordinator | Services know each other's events |
+| Risk | The coordinator becomes a central piece | Cyclic dependencies and hard-to-follow flows |

@@ -1,0 +1,83 @@
+concept: synchronized-mutex
+challenges:
+  - id: sm-1
+    type: multiple-choice
+    prompt: "`PaymentService.pay` is `synchronized`. The service runs on 3 pods behind a load balancer. Can the same order be charged twice?"
+    options:
+      - id: a
+        text: Yes. Each pod has its own monitor, so requests on different pods run the critical section at the same time.
+        correct: true
+        explanation: A monitor lives in the memory of one JVM. It cannot coordinate threads of other processes.
+      - id: b
+        text: No. `synchronized` is enforced by the load balancer.
+        correct: false
+        explanation: The load balancer knows nothing about monitors. `synchronized` is a JVM feature.
+      - id: c
+        text: No. `synchronized` locks the database row.
+        correct: false
+        explanation: It never touches the database. It only guards a monitor object inside the JVM.
+  - id: sm-2
+    type: multiple-choice
+    prompt: Why is putting `synchronized` on the whole `PaymentService.pay` method a throughput problem even on one pod?
+    options:
+      - id: a
+        text: It serializes payments for all orders, not only the ones that conflict.
+        correct: true
+        explanation: One monitor for every call means unrelated orders wait for each other. A lock per order id limits waiting to real conflicts.
+      - id: b
+        text: Because `synchronized` is slower than any database lock.
+        correct: false
+        explanation: There is no such rule. The cost comes from the scope of the lock, not the keyword.
+      - id: c
+        text: Because it makes the code non-atomic.
+        correct: false
+        explanation: It does make the section mutually exclusive in that JVM. The problem is the unnecessary exclusion.
+  - id: sm-3
+    type: multiple-choice
+    prompt: What is the advantage of `Mutex.withLock` over `synchronized` inside a Kotlin coroutine?
+    options:
+      - id: a
+        text: A coroutine waiting for the lock suspends and frees its thread instead of blocking it.
+        correct: true
+        explanation: Suspension lets the thread run other coroutines. A blocked thread is wasted while it waits.
+      - id: b
+        text: It works across several pods.
+        correct: false
+        explanation: A `Mutex` is also process-local.
+      - id: c
+        text: It removes the need for any critical section.
+        correct: false
+        explanation: It still defines a critical section, just in a suspending way.
+  - id: sm-4
+    type: multiple-choice
+    prompt: For which case is a local lock an appropriate mechanism?
+    options:
+      - id: a
+        text: Protecting an in-memory cache that only one process uses.
+        correct: true
+        explanation: All contenders are threads of the same JVM, so a local lock sees every one of them.
+      - id: b
+        text: Preventing two pods from paying the same order.
+        correct: false
+        explanation: The contenders are in different processes, which a local lock cannot coordinate.
+      - id: c
+        text: Preventing two services from overselling a stock row in a shared database.
+        correct: false
+        explanation: The shared state is in the database. Use an atomic update, versioning or row locks.
+
+  - id: sm-5
+    type: multiple-choice
+    prompt: "A Spring service method is both `synchronized` and `@Transactional`, and runs on a single pod. Can two requests still pay the same order twice?"
+    options:
+      - id: a
+        text: Yes. The transaction commits in the proxy after the method returns, so the lock is released before the commit and the next thread can read the old state.
+        correct: true
+        explanation: The lock and the transaction have different boundaries. Put the lock outside the transaction, or better, use a database mechanism.
+      - id: b
+        text: No. `synchronized` also delays the commit until the lock is released.
+        correct: false
+        explanation: The monitor knows nothing about the transaction. It is released when the method body ends.
+      - id: c
+        text: No, `@Transactional` serializes all calls to the method.
+        correct: false
+        explanation: A transaction does not serialize callers. Concurrent transactions run at the same time.

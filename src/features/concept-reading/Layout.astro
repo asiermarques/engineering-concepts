@@ -1,0 +1,54 @@
+---
+import '../../styles/global.css';
+import { locales, otherLocale, ui, type Locale } from '../../i18n/ui';
+
+interface Props {
+  locale: Locale;
+  title: string;
+  description?: string;
+  /** URL of the same page in each locale. */
+  alternates: Record<Locale, string>;
+}
+const { locale, title, description, alternates } = Astro.props;
+const t = ui[locale];
+const pageTitle = `${title} · ${t.siteTitle}`;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {description && <meta name="description" content={description} />}
+    <title>{pageTitle}</title>
+    {locales.filter((l) => l !== locale).map((l) => <link rel="alternate" hreflang={l} href={alternates[l]} />)}
+  </head>
+  <body>
+    <a class="skip-link" href="#content">{t.skipToContent}</a>
+    <header class="site-header">
+      <a class="site-title" href={`/${locale}/`}>{t.siteTitle}</a>
+      <nav aria-label={t.language} data-testid="language-switcher">
+        <ul class="language-switcher">
+          {
+            locales.map((l) => (
+              <li>
+                {l === locale ? (
+                  <span aria-current="true" class="language-switcher__current">
+                    {ui[l].languageName} <span class="sr-only">({t.currentLanguage})</span>
+                  </span>
+                ) : (
+                  <a href={alternates[l]} lang={l} hreflang={l}>
+                    {ui[l].languageName}
+                  </a>
+                )}
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </header>
+    <main id="content">
+      <slot />
+    </main>
+  </body>
+</html>

@@ -1,0 +1,87 @@
+concept: race-condition
+challenges:
+  - id: rc-1
+    type: multiple-choice
+    prompt: Dos peticiones ejecutan `POST /orders/42/pay` a la vez sobre el código leer → comprobar → escribir. ¿Qué puede pasar?
+    options:
+      - id: a
+        text: Las dos leen `PENDING`, las dos pasan la comprobación y se cobra dos veces al cliente.
+        correct: true
+        explanation: Nada impide que la petición B lea antes de que la A escriba `PAID`, así que las dos ven `PENDING`.
+      - id: b
+        text: La base de datos serializa las peticiones, así que la segunda siempre ve `PAID`.
+        correct: false
+        explanation: Cada sentencia es atómica por sí sola, pero la base de datos no agrupa sentencias separadas de peticiones distintas. El hueco entre la lectura, la comprobación y la escritura no está protegido.
+      - id: c
+        text: HTTP garantiza una sola petición por recurso a la vez.
+        correct: false
+        explanation: HTTP no tiene estado y no dice nada sobre peticiones concurrentes. Cada petición se ejecuta de forma independiente.
+  - id: rc-2
+    type: multiple-choice
+    prompt: ¿Qué afirmaciones sobre una race condition son verdaderas?
+    options:
+      - id: a
+        text: El resultado depende de cómo se intercalan las operaciones.
+        correct: true
+        explanation: Es la definición. El mismo código puede dar resultados distintos de una ejecución a otra.
+      - id: b
+        text: Puede ocurrir con una sola instancia de la aplicación.
+        correct: true
+        explanation: Los hilos de un mismo proceso ya se intercalan. Varios pods solo añaden otra fuente de concurrencia.
+      - id: c
+        text: Desaparece si añades un segundo `if` que vuelva a comprobar el estado.
+        correct: false
+        explanation: Comprobar de nuevo solo estrecha la ventana entre comprobación y escritura. No la cierra.
+      - id: d
+        text: Es fácil de detectar con un test unitario de un solo hilo.
+        correct: false
+        explanation: Un solo hilo ejecuta los pasos en orden, así que el intercalado dañino nunca ocurre en ese test.
+  - id: rc-3
+    type: multiple-choice
+    prompt: Dos ventas leen stock 10 y cada una guarda `stock - 1`. ¿Cuál es el stock final y cómo se llama este fallo?
+    options:
+      - id: a
+        text: 8, y es el resultado esperado.
+        correct: false
+        explanation: Para llegar a 8 cada escritura tendría que basarse en el resultado de la otra, justo lo que impide el intercalado.
+      - id: b
+        text: 9, un lost update.
+        correct: true
+        explanation: Las dos calcularon 10 - 1 a partir de la misma lectura, así que un decremento se sobrescribe y se pierde.
+      - id: c
+        text: 9, un deadlock.
+        correct: false
+        explanation: Un deadlock es una espera mutua que bloquea para siempre. Aquí nadie espera, las escrituras simplemente se pisan.
+  - id: rc-4
+    type: multiple-choice
+    prompt: ¿Por qué «en producción funciona con un solo pod» es una prueba débil de que el código es seguro?
+    options:
+      - id: a
+        text: Los hilos de un mismo pod ya se ejecutan en concurrencia, y escalar o recibir más carga hace mucho más probables los intercalados dañinos.
+        correct: true
+        explanation: La ausencia de fallos solo indica que la carrera no se ha dado. El timing cambia con la carga y el despliegue.
+      - id: b
+        text: Porque un pod no puede ejecutar más de una petición a la vez.
+        correct: false
+        explanation: Un pod atiende muchas peticiones concurrentes, normalmente con un pool de hilos o un event loop.
+      - id: c
+        text: Porque producción siempre usa otra base de datos.
+        correct: false
+        explanation: Nada en la pregunta lo sugiere. El problema es el timing, no el entorno.
+
+  - id: rc-5
+    type: multiple-choice
+    prompt: Un endpoint de registro ejecuta `SELECT 1 FROM users WHERE email = ?` e inserta el usuario solo si no encuentra ninguna fila. ¿Cómo garantizas emails únicos con concurrencia?
+    options:
+      - id: a
+        text: Añadir una restricción de unicidad sobre `email` y tratar el error de clave duplicada como «email ya registrado».
+        correct: true
+        explanation: La base de datos comprueba la unicidad de forma atómica al insertar, así que solo uno de dos registros concurrentes tiene éxito.
+      - id: b
+        text: Ejecutar el `SELECT` dos veces antes de insertar.
+        correct: false
+        explanation: Las dos peticiones pueden seguir sin ver ninguna fila antes de que alguna inserte. Comprobar más solo estrecha la ventana.
+      - id: c
+        text: Envolver el `SELECT` y el `INSERT` en una transacción con el nivel de aislamiento por defecto.
+        correct: false
+        explanation: Con READ COMMITTED las dos transacciones no ven ninguna fila y las dos insertan. Una transacción agrupa sentencias, no las serializa.

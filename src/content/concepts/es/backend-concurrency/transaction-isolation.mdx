@@ -1,0 +1,111 @@
+---
+id: transaction-isolation
+title: Transaction isolation
+topic: backend-concurrency
+order: 8
+learningObjective: Entender las anomalías de concurrencia, MVCC y deadlocks.
+summary: Los niveles de aislamiento cambian anomalías por concurrencia, MVCC da snapshots sin locks de lectura y los deadlocks se detectan y se resuelven abortando una transacción.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+El **aislamiento** decide qué puede ver una transacción de las demás transacciones concurrentes. Un aislamiento más fuerte previene más anomalías y cuesta más en bloqueos o reintentos.
+
+## ACID
+
+| Propiedad | Significado |
+| --- | --- |
+| Atomicity | Todas las operaciones se confirman o ninguna. |
+| Consistency | Se preservan las reglas de integridad definidas. |
+| Isolation | Controla la interacción entre transacciones concurrentes. |
+| Durability | Los cambios confirmados sobreviven a los fallos cubiertos por la garantía de persistencia. |
+
+Una transferencia entre cuentas ilustra la atomicidad: el cargo y el abono se confirman juntos. Una implementación real también tendría que comprobar el saldo disponible y validar las actualizaciones. El aislamiento es lo que más nos interesa aquí.
+
+## Anomalías
+
+| Anomalía | Qué ocurre |
+| --- | --- |
+| Dirty read | Leer datos que otra transacción aún no ha confirmado |
+| Non-repeatable read | Leer dos veces la misma fila y obtener valores distintos |
+| Phantom read | Ejecutar dos veces la misma consulta y obtener conjuntos de filas distintos |
+| Lost update | Dos ciclos de lectura-modificación-escritura se pisan |
+| Write skew | Dos transacciones leen datos solapados, escriben filas distintas y juntas rompen un invariante |
+
+## Niveles de aislamiento
+
+El estándar SQL define cuatro niveles. La tabla muestra lo que **permite el estándar**; los motores reales suelen prevenir más o comportarse distinto, así que comprueba el tuyo.
+
+| Nivel | Dirty read | Non-repeatable read | Phantom read |
+| --- | --- | --- | --- |
+| READ UNCOMMITTED | Posible | Posible | Posible |
+| READ COMMITTED | Prevenido | Posible | Posible |
+| REPEATABLE READ | Prevenido | Prevenido | Posible (estándar) |
+| SERIALIZABLE | Prevenido | Prevenido | Prevenido |
+
+```sql
+BEGIN ISOLATION LEVEL SERIALIZABLE;
+-- ...
+COMMIT;   -- puede fallar con un error de serialización: la aplicación debe reintentar
+```
+
+**SERIALIZABLE** garantiza que el efecto de las transacciones confirmadas es equivalente a ejecutarlas en algún orden secuencial, aunque internamente se ejecuten de forma concurrente. A cambio, puede haber más bloqueos o transacciones abortadas que necesitan reintentarse.
+
+Notas por motor: PostgreSQL usa READ COMMITTED por defecto, trata READ UNCOMMITTED como READ COMMITTED, y su REPEATABLE READ es snapshot isolation (sin phantoms, pero el write skew sigue siendo posible). MySQL InnoDB usa REPEATABLE READ por defecto.
+
+## Mismo nombre, comportamiento distinto
+
+| Motor | Por defecto | Lo que sorprende |
+| --- | --- | --- |
+| PostgreSQL | READ COMMITTED | REPEATABLE READ es snapshot isolation y **detecta** actualizaciones concurrentes de la misma fila (error de serialización), así que los lost updates fallan en vez de ocurrir. SERIALIZABLE (SSI) también detecta el write skew. |
+| MySQL InnoDB | REPEATABLE READ | Un `SELECT` normal lee un snapshot, pero el `UPDATE` y las lecturas con lock usan la fila **confirmada más reciente**. Un read-modify-write hecho en la aplicación (leer, calcular, `SET x = valor`) puede seguir perdiendo actualizaciones. Las lecturas con lock toman next-key (gap) locks. |
+| Oracle | READ COMMITTED | No tiene REPEATABLE READ; su SERIALIZABLE es snapshot isolation, así que el write skew es posible. |
+| SQL Server | READ COMMITTED con locks | Los lectores bloquean a los escritores salvo que se active READ_COMMITTED_SNAPSHOT o el aislamiento SNAPSHOT. |
+
+En una entrevista, di qué motor asumes antes de hablar de garantías.
+
+## MVCC
+
+**Multi-Version Concurrency Control** guarda varias versiones de cada fila. Una transacción lee de un **snapshot**, así que **los lectores no bloquean a los escritores ni los escritores a los lectores**. Los escritores siguen chocando con otros escritores de la misma fila. El coste es el almacenamiento de las versiones antiguas y su limpieza (vacuum). No significa que hayan desaparecido los locks ni los conflictos entre escrituras.
+
+## Write skew
+
+Dos médicos de guardia comprueban que haya al menos dos de guardia, y cada uno se retira. Con snapshot isolation ambos tienen éxito y no queda nadie. Soluciones: SERIALIZABLE (con reintentos), bloquear las filas que definen el invariante (`FOR UPDATE`), o una restricción que codifique el invariante.
+
+## Deadlocks
+
+Un **deadlock** es un ciclo de transacciones que esperan los locks de las demás:
+
+<StaticWalkthrough
+  caption="Dos transacciones bloquean las mismas dos filas en orden opuesto y se esperan mutuamente para siempre; la base de datos detecta el ciclo y aborta una de ellas."
+  columns={['Transacción A', 'Transacción B', 'Resultado']}
+  rows={[
+    ['bloquea la fila 1', '', 'A tiene la 1'],
+    ['', 'bloquea la fila 2', 'B tiene la 2'],
+    ['pide la fila 2 → espera a B', '', 'A espera'],
+    ['', 'pide la fila 1 → espera a A', 'ciclo detectado'],
+    ['', 'abortada como víctima (error de deadlock)', 'A continúa, B debe reintentar'],
+  ]}
+/>
+
+```java
+for (int attempt = 1; ; attempt++) {
+    try {
+        transfer(fromId, toId, amount);
+        break;
+    } catch (DeadlockLoserDataAccessException e) {   // o fallo de serialización
+        if (attempt == 3) throw e;
+    }
+}
+```
+
+```sql
+SELECT *
+FROM   accounts
+WHERE  id IN (1, 2)
+ORDER  BY id
+FOR UPDATE;   -- siempre primero el id más bajo
+```
+
+Muchos motores detectan deadlocks automáticamente, abortan una de las transacciones y liberan sus recursos: la aplicación debe estar preparada para reintentarla de forma segura. PostgreSQL hace la comprobación tras esperar `deadlock_timeout` (1 s por defecto); InnoDB los detecta de inmediato por defecto. Los deadlocks también aparecen con una sola sentencia que actualiza varias filas en distinto orden que otra, con comprobaciones de claves foráneas y con gap locks.
+
+Prevención: bloquear las filas **en un orden consistente** (por ejemplo por id ascendente), mantener las transacciones **cortas** y estar siempre preparado para **reintentar**.

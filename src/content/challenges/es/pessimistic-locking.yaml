@@ -1,0 +1,83 @@
+concept: pessimistic-locking
+challenges:
+  - id: pl-1
+    type: multiple-choice
+    prompt: "`SELECT ... FOR UPDATE` se ejecuta en una conexión en modo autocommit. ¿Cuánto tiempo queda bloqueada la fila?"
+    options:
+      - id: a
+        text: Solo hasta que termina esa sentencia, porque es su propia transacción.
+        correct: true
+        explanation: El lock dura hasta que termina la transacción. En autocommit cada sentencia es una transacción, así que la protección desaparece antes de tu comprobación y tu actualización.
+      - id: b
+        text: Hasta que la aplicación cierra la conexión.
+        correct: false
+        explanation: Cerrar la conexión no define la vida del lock. Lo hace el final de la transacción.
+      - id: c
+        text: Para siempre, hasta que otra sesión lo libere.
+        correct: false
+        explanation: Los locks se liberan al hacer commit o rollback, nunca por otra sesión.
+  - id: pl-2
+    type: multiple-choice
+    prompt: Una transacción ejecuta `SELECT ... FOR UPDATE` sobre un pedido y luego llama a la pasarela de pago, que tarda 3 segundos. ¿Cuál es el problema?
+    options:
+      - id: a
+        text: La fila sigue bloqueada y la conexión retenida durante toda la llamada, así que las demás peticiones hacen cola y el pool puede agotarse.
+        correct: true
+        explanation: El trabajo externo lento dentro de un lock multiplica las esperas. Haz la llamada remota fuera del lock o usa un enfoque que no lo mantenga.
+      - id: b
+        text: Ninguno, los locks son gratis.
+        correct: false
+        explanation: Los locks hacen esperar a los demás, y una conexión retenida es un recurso escaso.
+      - id: c
+        text: No se puede llamar a la pasarela dentro de una transacción.
+        correct: false
+        explanation: Técnicamente es posible. Es una mala idea por la duración del lock.
+  - id: pl-3
+    type: multiple-choice
+    prompt: ¿Qué aporta `SELECT ... FOR UPDATE SKIP LOCKED` en una tabla usada como cola de trabajos?
+    options:
+      - id: a
+        text: Cada worker toma un trabajo distinto sin bloquear, sin esperar a los demás.
+        correct: true
+        explanation: Las filas bloqueadas por otros workers se saltan en vez de esperarse, lo que reparte el trabajo.
+      - id: b
+        text: Todos los workers reciben el mismo trabajo, que se procesa varias veces.
+        correct: false
+        explanation: Una fila bloqueada es justo lo que SKIP LOCKED salta.
+      - id: c
+        text: Desactiva los locks.
+        correct: false
+        explanation: Las filas que devuelve se bloquean como siempre. Solo evita las filas ya bloqueadas.
+  - id: pl-4
+    type: multiple-choice
+    prompt: La transacción A bloquea las filas 1 y luego 2. La transacción B bloquea la 2 y luego la 1. ¿Qué puede pasar y qué lo evita?
+    options:
+      - id: a
+        text: Un deadlock. Bloquear las filas en el mismo orden en todas las transacciones lo evita.
+        correct: true
+        explanation: Cada una espera el lock que tiene la otra. Un orden global de adquisición elimina el ciclo.
+      - id: b
+        text: Nada, la base de datos las ejecuta una tras otra.
+        correct: false
+        explanation: La base de datos no las serializa. Se ejecutan en concurrencia y se bloquean mutuamente.
+      - id: c
+        text: Un lost update. Añadir una columna de versión lo evita.
+        correct: false
+        explanation: El problema es que dos transacciones se esperan mutuamente, no que se sobrescriban datos.
+
+  - id: pl-5
+    type: multiple-choice
+    prompt: "En PostgreSQL, dos transacciones ejecutan `SELECT * FROM users WHERE email = 'a@x.com' FOR UPDATE`, no encuentran ninguna fila y cada una inserta el usuario. ¿Qué pasa?"
+    options:
+      - id: a
+        text: Las dos inserciones pueden tener éxito, porque `FOR UPDATE` no puede bloquear una fila que todavía no existe. Hace falta una restricción de unicidad.
+        correct: true
+        explanation: Los locks de fila necesitan una fila. Para «solo puede existir uno», la base de datos tiene que imponer la unicidad.
+      - id: b
+        text: La segunda transacción espera, porque el resultado vacío queda bloqueado.
+        correct: false
+        explanation: PostgreSQL no bloquea rangos con FOR UPDATE. Los gap locks de MySQL se comportan distinto, y por eso importan los detalles de cada motor.
+      - id: c
+        text: La base de datos rechaza el segundo SELECT.
+        correct: false
+        explanation: Los dos SELECT simplemente no devuelven filas.

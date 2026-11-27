@@ -1,0 +1,83 @@
+concept: distributed-locking
+challenges:
+  - id: dl-1
+    type: multiple-choice
+    prompt: Why does each lock acquisition store a unique owner token, and why is the release done with a compare-and-delete script?
+    options:
+      - id: a
+        text: So a holder only deletes its own lock and never one that expired and was acquired by someone else.
+        correct: true
+        explanation: A plain `DEL` after expiry could remove another pod's valid lock. The token comparison makes the release safe, and the script makes compare and delete atomic.
+      - id: b
+        text: To make the lock last forever.
+        correct: false
+        explanation: Locks are leases and expire by design. The token does not change that.
+      - id: c
+        text: Because Redis needs a different value for each key.
+        correct: false
+        explanation: Redis does not require unique values. The token solves an ownership problem.
+  - id: dl-2
+    type: multiple-choice
+    prompt: Pod A holds a lease, stalls for longer than the TTL, and then resumes and writes. Pod B acquired the lock meanwhile. How do you stop A's stale write?
+    options:
+      - id: a
+        text: The resource checks a monotonically increasing fencing token and rejects the older one.
+        correct: true
+        explanation: Pod A cannot know its lease expired. Only the resource can refuse a write carrying an older token.
+      - id: b
+        text: Pod A checks `if (lockHeld)` right before writing.
+        correct: false
+        explanation: The pause can happen right after the check. This is a race condition again.
+      - id: c
+        text: Use a longer TTL so it never expires.
+        correct: false
+        explanation: A longer TTL makes expiry less likely but not impossible, and delays recovery from a crashed holder.
+  - id: dl-3
+    type: multiple-choice
+    prompt: What is the trade-off of a very short lock TTL?
+    options:
+      - id: a
+        text: A holder doing slow work can lose the lock while still running, so two pods may work at once.
+        correct: true
+        explanation: If processing takes longer than the lease, exclusion is lost. That is why fencing tokens or renewal are needed.
+      - id: b
+        text: A crashed holder blocks everybody for a long time.
+        correct: false
+        explanation: That is the problem of a long TTL, not a short one.
+      - id: c
+        text: There is no trade-off, short is always best.
+        correct: false
+        explanation: Short TTLs expire during slow work.
+  - id: dl-4
+    type: multiple-choice
+    prompt: "Two pods must not both set an order to PAID. Which mechanism is usually the simplest one that is enough?"
+    options:
+      - id: a
+        text: "`UPDATE orders SET status = 'PAID' WHERE id = ? AND status = 'PENDING'`, checking the affected rows."
+        correct: true
+        explanation: The invariant lives in one database row, so an atomic conditional update gives the guarantee without any lease to expire.
+      - id: b
+        text: A Redis lock with a 5-second TTL and no other check.
+        correct: false
+        explanation: It adds a moving part that can expire mid-operation and still leaves a race on the database write.
+      - id: c
+        text: Run a single pod and avoid scaling.
+        correct: false
+        explanation: It trades availability for a guarantee the database could give for free.
+
+  - id: dl-5
+    type: multiple-choice
+    prompt: A client acquires a lock with `SET NX` on a Redis primary. The primary crashes before replicating the key and a replica is promoted. What can happen?
+    options:
+      - id: a
+        text: The new primary has no lock, so a second client can acquire it while the first still believes it holds it.
+        correct: true
+        explanation: Replication is asynchronous, so an acknowledged write can be lost on failover. Correctness still needs fencing tokens or a consensus-backed store.
+      - id: b
+        text: Nothing, Redis replicates synchronously before acknowledging.
+        correct: false
+        explanation: By default Redis acknowledges before replicas have the write.
+      - id: c
+        text: The lock is automatically transferred to the first client's new session.
+        correct: false
+        explanation: There is no such mechanism. The promoted replica simply never saw the key.

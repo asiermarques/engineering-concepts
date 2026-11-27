@@ -1,0 +1,123 @@
+---
+id: atomicity
+title: Atomicity
+topic: backend-concurrency
+order: 2
+learningObjective: Solve a concurrency problem with a single atomic SQL update.
+summary: Moving the check into the write turns read-check-write into one indivisible statement.
+---
+
+An operation is **atomic** when no other operation can observe it half done: it happens entirely or not at all. The cheapest way to remove a race is often to make the check and the write **one statement** that the database executes atomically.
+
+## Conditional update
+
+Instead of reading the status and then writing it, put the condition in the `WHERE` clause:
+
+```sql
+UPDATE orders
+SET    status = 'PAID'
+WHERE  id = 42
+  AND  status = 'PENDING';
+```
+
+The database locks the row while it evaluates and updates it, so only one concurrent request can move the order from `PENDING` to `PAID`. The **number of affected rows** tells you who won:
+
+```java
+int updated = jdbc.update(
+    "UPDATE orders SET status = 'PAID' WHERE id = ? AND status = 'PENDING'", orderId);
+if (updated == 0) {
+    throw new OrderAlreadyPaidException(orderId);   // someone else got there first
+}
+gateway.charge(total);
+```
+
+The same idea fixes the lost update on stock, and also stops stock from going negative:
+
+```sql
+UPDATE stock
+SET    quantity = quantity - 1
+WHERE  product_id = 7
+  AND  quantity >= 1;
+```
+
+```kotlin
+val reserved = jdbc.update(
+    "UPDATE stock SET quantity = quantity - 1 WHERE product_id = ? AND quantity >= 1", productId)
+check(reserved == 1) { "Out of stock" }
+```
+
+## Stock on a products table
+
+```sql
+UPDATE products
+SET    stock = stock - 1
+WHERE  id = 123
+  AND  stock > 0;
+```
+
+```java
+int affectedRows = database.executeUpdate(sql);
+
+if (affectedRows == 1) {
+    createOrder();
+} else {
+    throw new OutOfStockException();
+}
+```
+
+The database coordinates concurrent updates on that row, so only one request can take the last unit. If creating the order and updating the stock live in the **same database**, they should be part of **one transaction** so both are confirmed or both undone.
+
+When a simple atomic operation can solve the problem, prefer it to more complex locking mechanisms.
+
+## Transactions
+
+A **transaction** groups several statements so they commit or roll back together. It gives you atomicity across statements, for example debiting one account and crediting another:
+
+```sql
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1 AND balance >= 100;
+-- 0 affected rows → insufficient funds: ROLLBACK, do not credit
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+COMMIT;
+```
+
+A transaction does not check that for you: if the debit matches no row and the code still runs the credit and commits, money is created out of nothing. Always check the affected rows of each guarded statement.
+
+| Mechanism | Guarantees | Does not guarantee |
+| --- | --- | --- |
+| Atomic conditional update | Check and write are one step on that row | Anything outside the database |
+| Transaction | Several statements commit or roll back together | By itself, that a read followed by a write is race-free (depends on isolation level) |
+
+## Why the conditional update works, engine by engine
+
+The second `UPDATE` does not run on a stale snapshot:
+
+- **PostgreSQL, READ COMMITTED**: the second `UPDATE` waits for the row lock. When the first commits, it **re-evaluates the `WHERE` on the new row version**, sees `PAID` and updates 0 rows.
+- **PostgreSQL, REPEATABLE READ or SERIALIZABLE**: instead of 0 rows, the second transaction fails with *could not serialize access due to concurrent update*, and the application has to retry it.
+- **MySQL InnoDB**: an `UPDATE` always reads the latest committed version of the row (a *current read*), even under REPEATABLE READ, so the guard also holds.
+
+So the pattern is safe, but **how the loser finds out depends on the isolation level**: 0 affected rows or an error to retry.
+
+## Two meanings of "atomic"
+
+- In **ACID**, atomicity means *all or nothing on failure*: a crash in the middle never leaves half the statements applied. It says nothing about concurrent transactions; that is **isolation**.
+- In **concurrency**, an atomic operation is one that other threads or transactions cannot interleave with: what makes the conditional `UPDATE` safe is the row lock plus the re-check, not ACID atomicity.
+
+## Useful atomic tools
+
+```sql
+-- get the new value in the same statement (PostgreSQL)
+UPDATE products SET stock = stock - 1 WHERE id = 123 AND stock > 0 RETURNING stock;
+
+-- atomic "insert or increment" (PostgreSQL)
+INSERT INTO page_views (page_id, views) VALUES (7, 1)
+ON CONFLICT (page_id) DO UPDATE SET views = page_views.views + 1;
+```
+
+In memory, `AtomicInteger.incrementAndGet()` or `compareAndSet` play the same role inside one JVM.
+
+## Limits
+
+- A transaction does **not** make `SELECT` then `UPDATE` safe by default: under `READ COMMITTED` two transactions can read the same value. Isolation levels are covered later.
+- A rollback undoes **database** changes only. A card already charged through an HTTP call is not rolled back.
+- Atomic updates fit when the invariant lives in one row or statement. Otherwise you need locks, versions or a saga.

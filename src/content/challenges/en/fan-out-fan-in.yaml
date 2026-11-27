@@ -1,0 +1,83 @@
+concept: fan-out-fan-in
+challenges:
+  - id: fo-1
+    type: multiple-choice
+    prompt: Stock, Vouchers and Customers calls take 100 ms, 200 ms and 50 ms. Roughly how long does Checkout take sequentially and with fan-out/fan-in?
+    options:
+      - id: a
+        text: About 350 ms sequentially and about 200 ms with fan-out/fan-in.
+        correct: true
+        explanation: Sequential time is the sum. Concurrent time is roughly the slowest call, because they wait together.
+      - id: b
+        text: About 200 ms in both cases.
+        correct: false
+        explanation: Sequential calls add up because each starts after the previous one ends.
+      - id: c
+        text: About 350 ms in both cases.
+        correct: false
+        explanation: Independent calls started together overlap their waiting time.
+  - id: fo-2
+    type: multiple-choice
+    prompt: "In Kotlin, inside `coroutineScope { ... }` one of the `async` children throws. What happens to its siblings?"
+    options:
+      - id: a
+        text: They are cancelled and the exception propagates from the scope.
+        correct: true
+        explanation: Structured concurrency ties children to their scope. A failure cancels the rest, so no orphan work is left running.
+      - id: b
+        text: They keep running and the exception is ignored.
+        correct: false
+        explanation: Ignoring the failure would hide errors and leak work.
+      - id: c
+        text: They continue and the exception is only thrown at program exit.
+        correct: false
+        explanation: The exception propagates when the scope completes or when you await the failed child.
+  - id: fo-3
+    type: multiple-choice
+    prompt: The recommendations service is down but the checkout page can be used without it. What is the best handling?
+    options:
+      - id: a
+        text: Use a short timeout and a fallback, such as an empty list, so the page still renders.
+        correct: true
+        explanation: Optional data should not turn into a failed checkout. The failure becomes a degraded response.
+      - id: b
+        text: Fail the whole request with 500.
+        correct: false
+        explanation: An optional dependency would lower the availability of the critical flow.
+      - id: c
+        text: Retry forever until it answers.
+        correct: false
+        explanation: It makes every request wait on an optional dependency.
+  - id: fo-4
+    type: multiple-choice
+    prompt: Which calls can NOT be fanned out?
+    options:
+      - id: a
+        text: A call whose input is the result of a previous call, such as pricing a cart with the id returned by a previous call.
+        correct: true
+        explanation: A data dependency forces an order. Only independent calls can run together.
+      - id: b
+        text: Stock and customer lookups that only need the order id.
+        correct: false
+        explanation: Neither needs the other's result, so they can run together.
+      - id: c
+        text: Two calls to different services with different timeouts.
+        correct: false
+        explanation: Different timeouts do not create a dependency.
+
+  - id: fo-5
+    type: multiple-choice
+    prompt: Each of 100 backend calls is slow in 1% of cases. A request fans out to all 100 and waits for every answer. Roughly how often is the request slow?
+    options:
+      - id: a
+        text: About 63% of the time.
+        correct: true
+        explanation: 1 − 0.99^100 ≈ 0.63. Waiting for all the calls makes the slowest one decide the latency.
+      - id: b
+        text: About 1% of the time, like each call.
+        correct: false
+        explanation: That would only hold if the request depended on a single call.
+      - id: c
+        text: Never, because the calls run concurrently.
+        correct: false
+        explanation: Concurrency removes the sum of latencies, not the wait for the slowest call.

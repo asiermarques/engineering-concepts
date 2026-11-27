@@ -1,0 +1,87 @@
+concept: race-condition
+challenges:
+  - id: rc-1
+    type: multiple-choice
+    prompt: Two requests run `POST /orders/42/pay` at the same time against the read → check → write code. What can happen?
+    options:
+      - id: a
+        text: Both read `PENDING`, both pass the check and the customer is charged twice.
+        correct: true
+        explanation: Nothing stops request B from reading before request A writes `PAID`, so both see `PENDING`.
+      - id: b
+        text: The database serializes the requests, so the second one always sees `PAID`.
+        correct: false
+        explanation: Each statement is atomic on its own, but the database does not group separate statements from different requests. The gap between the read, the check and the write is not protected.
+      - id: c
+        text: HTTP guarantees one request per resource at a time.
+        correct: false
+        explanation: HTTP is stateless and says nothing about concurrent requests. Each request runs independently.
+  - id: rc-2
+    type: multiple-choice
+    prompt: Which statements about a race condition are true?
+    options:
+      - id: a
+        text: The outcome depends on how the operations interleave.
+        correct: true
+        explanation: That is the definition. The same code can give different results from one run to another.
+      - id: b
+        text: It can happen with a single application instance.
+        correct: true
+        explanation: Threads of one process already interleave. Multiple pods only add another source of concurrency.
+      - id: c
+        text: It disappears if you add a second `if` that checks the status again.
+        correct: false
+        explanation: Checking again only narrows the window between check and write. It does not close it.
+      - id: d
+        text: It is easy to catch with a single-threaded unit test.
+        correct: false
+        explanation: A single thread executes the steps in order, so the bad interleaving never happens in that test.
+  - id: rc-3
+    type: multiple-choice
+    prompt: Two sales read stock 10 and each saves `stock - 1`. What is the final stock, and what is this called?
+    options:
+      - id: a
+        text: 8, and it is the expected result.
+        correct: false
+        explanation: 8 would require each write to be based on the other's result, which is what the interleaving prevents.
+      - id: b
+        text: 9, a lost update.
+        correct: true
+        explanation: Both computed 10 - 1 from the same read, so one decrement is overwritten and lost.
+      - id: c
+        text: 9, a deadlock.
+        correct: false
+        explanation: A deadlock is a mutual wait that blocks forever. Nobody waits here, the writes simply overwrite each other.
+  - id: rc-4
+    type: multiple-choice
+    prompt: Why is "it works in production with one pod" weak evidence that the code is safe?
+    options:
+      - id: a
+        text: Threads inside one pod already run concurrently, and scaling out or more load makes bad interleavings far more likely.
+        correct: true
+        explanation: Absence of failures only shows the race was not hit. Timing changes with load and deployment.
+      - id: b
+        text: Because one pod cannot run more than one request at a time.
+        correct: false
+        explanation: A pod handles many requests concurrently, usually with a thread pool or event loop.
+      - id: c
+        text: Because production always uses a different database.
+        correct: false
+        explanation: Nothing in the question implies that. The issue is timing, not the environment.
+
+  - id: rc-5
+    type: multiple-choice
+    prompt: A signup endpoint runs `SELECT 1 FROM users WHERE email = ?` and inserts the user only if no row is found. How do you guarantee unique emails under concurrency?
+    options:
+      - id: a
+        text: Add a unique constraint on `email` and handle the duplicate-key error as "email already registered".
+        correct: true
+        explanation: The database checks uniqueness atomically on insert, so only one of two concurrent signups succeeds.
+      - id: b
+        text: Run the `SELECT` twice before inserting.
+        correct: false
+        explanation: Both requests can still see no row before either inserts. Checking more only narrows the window.
+      - id: c
+        text: Wrap the `SELECT` and the `INSERT` in a transaction at the default isolation level.
+        correct: false
+        explanation: Under READ COMMITTED both transactions see no row and both insert. A transaction groups statements, it does not serialize them.

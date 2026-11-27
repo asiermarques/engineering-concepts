@@ -1,0 +1,117 @@
+---
+id: resilience
+title: Resiliencia
+topic: backend-concurrency
+order: 12
+learningObjective: Distinguir retries, rate limiting, backpressure, circuit breaker y bulkhead.
+summary: Cada patrón protege algo distinto. Los timeouts acotan la espera, los retries recuperan fallos transitorios y el resto evita que una parte sobrecargada arrastre todo.
+---
+
+Las llamadas remotas fallan, se ralentizan y a veces tienen éxito sin avisarte. Estos patrones se combinan, y cada uno responde a una pregunta distinta.
+
+| Patrón | Pregunta que responde | Protege |
+| --- | --- | --- |
+| **Timeout** | ¿Cuánto estoy dispuesto a esperar? | Los hilos y la latencia del llamante |
+| **Retry** | ¿Es probable que el fallo sea transitorio? | La tasa de éxito de una llamada inestable |
+| **Rate limiting** | ¿Cuántas peticiones acepto por unidad de tiempo? | Al servidor frente a sus clientes |
+| **Backpressure** | ¿Cómo digo a los productores que vayan más despacio? | A un consumidor que no da abasto |
+| **Circuit breaker** | ¿Debo dejar de llamar a una dependencia que sigue fallando? | Al llamante y a la dependencia que falla |
+| **Bulkhead** | ¿Cómo evito que una dependencia consuma todos los recursos? | Al resto del sistema |
+
+## Token bucket
+
+Un cubo guarda hasta un número máximo de tokens (por ejemplo 5) y cada petición consume uno. Los tokens se reponen automáticamente a una velocidad configurada, así que se permiten ráfagas cortas y se limita el ritmo medio. Cuando el cubo está vacío, la petición se rechaza, típicamente con `429 Too Many Requests`. Puede implementarse en un API gateway o sobre un almacenamiento compartido como Redis, consumiendo y rellenando tokens de forma **atómica**.
+
+## Timeouts: el resultado es desconocido
+
+Conviene distinguir el tiempo para establecer la conexión, el tiempo de lectura y el **presupuesto total** de la petición: si Checkout tiene 500 ms en total, no tiene sentido esperar varios segundos a cada dependencia.
+
+Un timeout significa que *dejaste de esperar*, **no** que la operación remota no se ejecutara. El cobro puede haber tenido éxito.
+
+```java
+HttpRequest request = HttpRequest.newBuilder(uri)
+    .timeout(Duration.ofSeconds(2))
+    .header("Idempotency-Key", key)   // para que un retry no pueda cobrar dos veces
+    .POST(body).build();
+```
+
+## Retries
+
+Reintenta solo fallos **transitorios**, solo operaciones **idempotentes** (o con clave de idempotencia), un número **acotado** de veces y con **backoff exponencial y jitter**:
+
+```kotlin
+suspend fun <T> retry(times: Int = 3, base: Long = 100, block: suspend () -> T): T {
+    var attempt = 0
+    while (true) {
+        try { return block() } catch (e: IOException) {
+            if (++attempt >= times) throw e
+            delay(base * (1L shl (attempt - 1)) + Random.nextLong(base))   // backoff + jitter
+        }
+    }
+}
+```
+
+Los reintentos inmediatos de muchos clientes amplifican una caída (una retry storm). El **backoff exponencial** aumenta progresivamente la espera entre reintentos y el **jitter** introduce aleatoriedad para que los clientes no reintenten a la vez:
+
+```
+Primer retry:  100 ms + jitter
+Segundo retry: 200 ms + jitter
+Tercer retry:  400 ms + jitter
+```
+
+Limita los reintentos, respeta el presupuesto total y comprueba que la operación es segura de repetir.
+
+## Rate limiting y backpressure
+
+- El **rate limiting** rechaza lo que excede una política, por ejemplo un **token bucket** que se rellena a ritmo fijo y permite ráfagas cortas. Las peticiones sobrantes reciben `429 Too Many Requests`.
+- El **backpressure** empuja el límite hacia atrás: una **cola acotada**, límites de concurrencia o una señal de demanda hacen que los productores esperen, vayan más despacio o descarten, en vez de acumular memoria sin límite. Los sistemas reactivos tienen un modelo explícito en el que el consumidor pide cuántos elementos está preparado para recibir.
+- El **load shedding** es rechazar trabajo deliberadamente cuando el sistema no puede procesarlo con garantías razonables, por ejemplo responder `503 Service Unavailable` antes de que el servicio colapse.
+
+## Circuit breaker
+
+```
+CLOSED ──(tasa de fallos demasiado alta)──▶ OPEN ──(tiempo de espera)──▶ HALF-OPEN
+   ▲                                          │                              │
+   └────────(la prueba funciona)──────────────┴──(la prueba falla)───────────┘
+```
+
+Una configuración de ejemplo (no son valores recomendados universalmente; ajústalos al tráfico y a cada dependencia):
+
+```yaml
+circuitBreaker:
+  failureRateThreshold: 50%
+  slidingWindowSize: 100
+  minimumNumberOfCalls: 20
+  waitDurationInOpenState: 30s
+  permittedCallsInHalfOpenState: 5
+```
+
+Mientras está **open**, las llamadas fallan al instante sin tocar la dependencia, dándole tiempo a recuperarse. **Half-open** deja pasar unas pocas llamadas de prueba.
+
+## Bulkhead
+
+Separa recursos por dependencia, por ejemplo si Checkout llama a PayPal, Adyen y un servicio de vouchers, dale a cada uno su propio límite de concurrencia o pool. El objetivo es que el fallo de una dependencia no consuma todos los recursos y provoque un fallo en cascada. Como los compartimentos estancos de un barco, cada dependencia tiene su propio pool de hilos, semáforo o pool de conexiones:
+
+```kotlin
+private val paymentsLimit = Semaphore(20)     // un proveedor de pagos lento usa como máximo 20 huecos
+private val recommendationsLimit = Semaphore(5)
+```
+
+Si las recomendaciones se cuelgan, consumen sus 5 huecos y nada más.
+
+## Detalles que importan en producción
+
+- **Los reintentos se multiplican entre capas.** Si el gateway, el servicio y su cliente reintentan 3 veces cada uno, una base de datos que falla recibe hasta 3 × 3 × 3 = 27 intentos por petición de usuario. Reintenta en una sola capa y usa un **retry budget** (por ejemplo, que los reintentos sean como mucho el 10 % de las peticiones).
+- **Reintenta solo lo reintentable**: timeouts, errores de conexión, `503` y `429`, respetando `Retry-After`. No reintentes `400`, `401`, `404` ni `409`: volverán a fallar.
+- **Propaga los deadlines**: pasa el presupuesto restante hacia abajo (gRPC lo hace con deadlines). Una dependencia no debería seguir trabajando en una petición cuyo llamante ya se ha rendido.
+- **Elige los timeouts con datos**: parte del p99 observado de la dependencia más un margen, dentro del presupuesto total del llamante.
+- **Full jitter** (una espera aleatoria entre 0 y el backoff) reparte mejor los reintentos que sumar una pequeña cantidad aleatoria.
+
+| Algoritmo de rate limiting | Comportamiento |
+| --- | --- |
+| Ventana fija | Contador simple por minuto; permite ráfagas dobles en los bordes de la ventana |
+| Ventana deslizante | Suaviza los bordes, a cambio de algo de memoria o precisión |
+| Token bucket | Permite ráfagas hasta la capacidad, limita el ritmo medio |
+| Leaky bucket | Encola las peticiones y las libera a un ritmo constante |
+
+Un circuit breaker suele vivir **por instancia y por dependencia**: cada pod decide según lo que ve, así que los pods pueden abrirlo en momentos distintos.

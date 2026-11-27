@@ -1,0 +1,87 @@
+concept: idempotency
+challenges:
+  - id: id-1
+    type: multiple-choice
+    prompt: A client sends `POST /payments` with an `Idempotency-Key`, times out and sends the same request again with the same key. What should the server do?
+    options:
+      - id: a
+        text: Return the stored result of the first execution (or tell the client it is still in progress), without charging again.
+        correct: true
+        explanation: That is the purpose of the key. The effect happens once, however many times the request arrives.
+      - id: b
+        text: Charge again, because every POST is a new payment.
+        correct: false
+        explanation: With a key, the server must treat repeated requests as the same payment.
+      - id: c
+        text: Always reject the second request with 500.
+        correct: false
+        explanation: A retry is normal client behaviour. Rejecting it with a server error gives the client no useful answer.
+  - id: id-2
+    type: multiple-choice
+    prompt: Why must the key be enforced with a unique constraint rather than "SELECT the key, and if absent INSERT it"?
+    options:
+      - id: a
+        text: Two concurrent requests can both see the key as absent. Only the constraint lets exactly one insert succeed.
+        correct: true
+        explanation: Check-then-insert is a race condition again. The database enforces uniqueness atomically.
+      - id: b
+        text: Because SELECT is not allowed on key tables.
+        correct: false
+        explanation: Nothing forbids it. It is just not enough.
+      - id: c
+        text: Because a unique constraint makes the table faster to write.
+        correct: false
+        explanation: Performance is not the reason. Correctness under concurrency is.
+  - id: id-3
+    type: multiple-choice
+    prompt: The same `Idempotency-Key` arrives with a different request body (another amount). What is the right behaviour?
+    options:
+      - id: a
+        text: Reject it, for example with 422, because the key is being reused for a different request.
+        correct: true
+        explanation: Comparing a hash of the request detects misuse and avoids replaying the wrong response.
+      - id: b
+        text: Return the response of the first request as if nothing changed.
+        correct: false
+        explanation: The client would believe its new request was processed when it was not.
+      - id: c
+        text: Execute the new body and overwrite the stored response.
+        correct: false
+        explanation: This breaks the guarantee that one key means one operation.
+  - id: id-4
+    type: multiple-choice
+    prompt: Which operations are idempotent by their nature?
+    options:
+      - id: a
+        text: "`PUT /orders/42` replacing the order with the same full body."
+        correct: true
+        explanation: Applying the same replacement twice leaves the same state.
+      - id: b
+        text: "`DELETE /orders/42`, regarding the resulting state."
+        correct: true
+        explanation: The state after one or many deletes is the same. The status code may differ (204 then 404), but the effect does not.
+      - id: c
+        text: "`UPDATE accounts SET balance = balance - 10 WHERE id = 1`"
+        correct: false
+        explanation: Every execution subtracts again, so repeating it changes the result.
+      - id: d
+        text: "`POST /payments` without any key."
+        correct: false
+        explanation: Each call may create another payment. This is why the key is needed.
+
+  - id: id-5
+    type: multiple-choice
+    prompt: A key stays in `PROCESSING` after the service crashed, and the provider may or may not have charged the customer. What is the right recovery?
+    options:
+      - id: a
+        text: Query the payment status at the provider, using the persisted operation id and a stable idempotency key, and reconcile before deciding.
+        correct: true
+        explanation: A local transaction cannot tell whether another system charged the card. Only the provider (or reconciliation) knows.
+      - id: b
+        text: Delete the old `PROCESSING` key and process the payment again.
+        correct: false
+        explanation: If the first attempt did charge, this charges the customer twice.
+      - id: c
+        text: Mark it `COMPLETED` so the client stops retrying.
+        correct: false
+        explanation: Declaring success without knowing the outcome can hide a payment that never happened.

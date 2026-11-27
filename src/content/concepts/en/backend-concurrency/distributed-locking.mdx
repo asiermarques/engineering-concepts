@@ -1,0 +1,93 @@
+---
+id: distributed-locking
+title: Distributed locking
+topic: backend-concurrency
+order: 7
+learningObjective: Understand leases, owner tokens and fencing tokens.
+summary: A lock shared across pods is a lease with an owner, and it is only safe if the protected resource checks a fencing token.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+When the shared state is not a single database row, pods need a **distributed lock** held in a shared coordinator such as Redis, ZooKeeper or a database table. It must never be a lock that can be held forever, so it is a **lease**: it expires after a TTL.
+
+```
+SET lock:order:42 <owner-token> NX PX 30000
+```
+
+`NX` sets the key only if it does not exist, and `PX 30000` expires it after 30 seconds. The value is a **unique owner token** (a random UUID per acquisition).
+
+Without expiry, a process that dies without releasing the lock would block the resource forever.
+
+```java
+String token = generateUniqueToken();
+
+if (lock.tryAcquire(productId, token)) {
+    try {
+        processProduct();
+    } finally {
+        lock.release(productId, token);
+    }
+}
+```
+
+## Release only your own lock
+
+```lua
+-- Redis Lua script: delete only if the token still matches (atomic)
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+end
+return 0
+```
+
+A plain `DEL` could delete a lock that expired and was acquired by another pod in the meantime: A acquires for 10 s, pauses for 15 s, the lock expires, B acquires, and A wakes up and releases B's lock.
+
+## The lease problem
+
+A lease can expire while its holder is still running, because of a long GC pause, a slow network call or a stalled thread:
+
+<StaticWalkthrough
+  caption="Pod A pauses longer than its lease; pod B acquires the lock; when A wakes up it still believes it holds the lock and writes with a stale token, which the resource rejects thanks to the fencing token."
+  columns={['Pod A', 'Pod B', 'Lock / resource']}
+  rows={[
+    ['acquires the lock, token 33', '', 'owner A, token 33'],
+    ['paused (GC, network stall)', '', 'lease expires'],
+    ['', 'acquires the lock, token 34', 'owner B, token 34'],
+    ['', 'writes with token 34', 'accepted, highest token seen = 34'],
+    ['resumes, writes with token 33', '', 'rejected: 33 < 34'],
+  ]}
+/>
+
+A **fencing token** is a number that increases with every acquisition. The **protected resource** (the database) remembers the highest token it has seen and rejects older ones:
+
+```sql
+UPDATE orders
+SET    status = 'PAID', last_fencing_token = 34
+WHERE  id = 42
+  AND  last_fencing_token < 34;
+```
+
+Checking the owner on release does not stop A from continuing to write after its lock expired, which is why the resource must validate the token. This needs a coordinator that issues tokens with the required guarantees and a resource that rejects writes with old tokens. Without that check, a lease alone cannot guarantee mutual exclusion, and a simple Redis lock does not guarantee strict mutual exclusion under any infrastructure failure or network partition either.
+
+## Choosing the TTL and the mechanism
+
+| Decision | Trade-off |
+| --- | --- |
+| Short TTL | Frees crashed holders quickly, but expires during slow work. |
+| Long TTL | Safe for slow work, but a crashed holder blocks everyone for a long time. |
+| Renewing the lease | Handles long work, but the renewal itself can fail or stall. |
+| Unique constraint or conditional update | Often enough, and has no lease to expire: prefer it when the invariant lives in your database. |
+
+A distributed lock is **efficiency** (avoid duplicate work) or **correctness** (avoid corruption). For correctness, add a fencing token or rely on the database's own atomicity.
+
+## Beyond a single Redis
+
+- **Replication can lose the lock.** Redis replicates asynchronously: if the primary acknowledges `SET NX` and fails before replicating it, the promoted replica has no lock and another client acquires it.
+- **Redlock** acquires the lock on a majority of independent Redis nodes. It is debated: its safety depends on timing assumptions (clocks, pauses, network delays), and it does not produce fencing tokens.
+- **Consensus systems** such as etcd or ZooKeeper give leases backed by consensus, and their revision numbers (etcd) or sequential nodes (ZooKeeper) can serve as fencing tokens.
+- **PostgreSQL advisory locks** are often the simplest option if you already have the database: `SELECT pg_try_advisory_xact_lock(42)` takes a lock released at the end of the transaction. Session-level advisory locks are tied to the connection, so they break with poolers in transaction mode such as PgBouncer.
+- **Scheduled jobs** on several pods are a common real use: libraries such as ShedLock store the lock in the database so only one pod runs each execution.
+
+## My rule
+
+If the problem can be solved with a unique constraint, an atomic operation or a database transaction, avoid introducing a distributed lock.

@@ -1,0 +1,83 @@
+concept: saga
+challenges:
+  - id: sg-1
+    type: multiple-choice
+    prompt: ¿Por qué se usa una saga en un checkout que abarca los servicios de inventario, pagos y envíos, cada uno con su base de datos?
+    options:
+      - id: a
+        text: No hay una única transacción ACID entre los servicios, así que el flujo se divide en transacciones locales con compensaciones.
+        correct: true
+        explanation: Cada servicio solo puede confirmar o deshacer sus propios datos. Una saga gestiona la consistencia entre ellos.
+      - id: b
+        text: Porque una saga da el mismo aislamiento que una única transacción ACID.
+        correct: false
+        explanation: Una saga expone estados intermedios a otros lectores. Es consistencia eventual, no aislamiento.
+      - id: c
+        text: Porque las sagas evitan tener que gestionar fallos.
+        correct: false
+        explanation: Las sagas existen precisamente para gestionar fallos a mitad de un flujo.
+  - id: sg-2
+    type: multiple-choice
+    prompt: El pago se cobró y después falló el envío. ¿Qué hace la saga?
+    options:
+      - id: a
+        text: Ejecuta compensaciones de los pasos completados, como reembolsar el pago y liberar el stock.
+        correct: true
+        explanation: Una compensación es una acción de negocio que deshace semánticamente un paso ya confirmado.
+      - id: b
+        text: Hace rollback de la transacción de la base de datos del servicio de pagos.
+        correct: false
+        explanation: Esa transacción ya estaba confirmada. Ya no se puede deshacer.
+      - id: c
+        text: Ignora el fallo y deja el pedido pagado sin envío.
+        correct: false
+        explanation: Eso dejaría el sistema inconsistente.
+  - id: sg-3
+    type: multiple-choice
+    prompt: ¿Por qué los pasos y las compensaciones de una saga deben ser idempotentes?
+    options:
+      - id: a
+        text: Se reintentan tras caídas y timeouts, así que el mismo paso puede entregarse más de una vez.
+        correct: true
+        explanation: Sin idempotencia, un reembolso o una reserva reintentados se aplicarían dos veces.
+      - id: b
+        text: Porque las compensaciones nunca se ejecutan.
+        correct: false
+        explanation: Se ejecutan siempre que falla un paso posterior.
+      - id: c
+        text: Para evitar la necesidad de persistencia.
+        correct: false
+        explanation: El estado de la saga se sigue teniendo que persistir para recuperarse de una caída.
+  - id: sg-4
+    type: multiple-choice
+    prompt: ¿Qué afirmación contrasta correctamente orquestación y coreografía?
+    options:
+      - id: a
+        text: En la orquestación un coordinador dirige los pasos, en la coreografía cada servicio reacciona a los eventos de los demás.
+        correct: true
+        explanation: La orquestación centraliza el flujo, la coreografía lo distribuye.
+      - id: b
+        text: En la coreografía un coordinador central guarda todo el flujo.
+        correct: false
+        explanation: Eso describe la orquestación.
+      - id: c
+        text: Son lo mismo, solo con nombres distintos.
+        correct: false
+        explanation: Distribuyen el control de forma distinta, con acoplamiento y visibilidad diferentes.
+
+  - id: sg-5
+    type: multiple-choice
+    prompt: En una saga de checkout, ¿por qué autorizar la tarjeta al principio y capturarla solo al final?
+    options:
+      - id: a
+        text: Una autorización solo retiene los fondos y se puede anular de forma barata, así que si falla el stock o el envío la compensación es una anulación en vez de un reembolso.
+        correct: true
+        explanation: Retrasar el paso difícil de deshacer (la captura) hace baratos de compensar los pasos anteriores.
+      - id: b
+        text: Porque las redes de tarjetas no permiten capturar primero.
+        correct: false
+        explanation: La captura inmediata es posible. La clave es lo fácil que es deshacer el paso.
+      - id: c
+        text: Porque las autorizaciones nunca caducan, así que la saga puede esperar indefinidamente.
+        correct: false
+        explanation: Las autorizaciones caducan tras algunos días, lo que de hecho limita cuánto puede esperar la saga.

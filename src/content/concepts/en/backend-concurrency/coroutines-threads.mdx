@@ -1,0 +1,98 @@
+---
+id: coroutines-threads
+title: Coroutines and threads
+topic: backend-concurrency
+order: 9
+learningObjective: Tell concurrency, parallelism and blocking operations apart.
+summary: Concurrency is about structuring overlapping work, parallelism is about running it at the same instant, and blocking a thread wastes it.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+- **Concurrency**: several tasks are in progress and overlap in time. One core can do it by switching between them.
+- **Parallelism**: several tasks literally run at the same instant on different cores.
+- **Blocking**: a thread waits (for I/O, a lock, a sleep) and does nothing else meanwhile.
+
+## Threads
+
+A platform thread is an OS thread with its own stack, so there are limited amounts of them. A thread-per-request server is simple, but each request waiting on a database or an HTTP call **holds a thread**, and a pool of 200 threads serves at most 200 requests that are waiting.
+
+```java
+// Java 21+: virtual threads are cheap, so blocking code scales much better
+try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    executor.submit(() -> callPaymentService());
+}
+```
+
+## Thread pools
+
+Instead of creating a thread per operation, keep a set of reusable threads:
+
+```java
+ExecutorService executor = Executors.newFixedThreadPool(20);
+
+executor.submit(() -> callStockService());
+```
+
+Up to 20 worker threads run tasks; if all are busy, extra tasks wait in a queue. In production, bound that queue as well: this factory uses a practically unbounded one.
+
+## Event loop
+
+One thread can manage many I/O operations without blocking while each one finishes. When a network operation completes, its continuation is scheduled to run. It is the model of Node.js and reactive frameworks such as Netty. The main risk is running a **blocking** or **CPU-heavy** operation inside the event loop: you hurt every request that depends on that same thread.
+
+## Coroutines
+
+A Kotlin coroutine can **suspend** at a call such as `delay` or an async HTTP call, freeing the thread to run another coroutine, and resume later. Thousands of coroutines can share a few threads.
+
+```kotlin
+suspend fun load(): Order {
+    delay(200)                 // suspends: the thread is free meanwhile
+    // Thread.sleep(200)       // blocks: the thread is wasted
+    return fetchOrder()
+}
+
+withContext(Dispatchers.IO) {  // blocking JDBC or file I/O goes on the IO dispatcher
+    jdbc.query("SELECT ...")
+}
+```
+
+A coroutine does not magically turn a blocking operation into a non-blocking one. If you call a blocking HTTP client, you must use appropriate execution resources.
+
+**Virtual threads** (Java 21+) let you keep a blocking programming style with far lighter threads: during many blocking I/O operations the virtual thread frees the platform thread that was running it. They make it easier to handle large numbers of concurrent requests, but they do not remove the need to limit access to databases, external providers or physical resources.
+
+| | Platform thread | Virtual thread / coroutine |
+| --- | --- | --- |
+| Cost | Heavy, scarce | Light, plentiful |
+| Waiting on I/O | Blocks a thread | Unmounts or suspends, thread reused |
+| Needs | A big pool for high concurrency | Few carrier threads |
+| Risk | Pool exhaustion | Blocking calls on a small dispatcher |
+
+## Concurrent versus sequential
+
+<StaticWalkthrough
+  caption="Three independent calls of 200 ms each: sequentially they take about 600 ms, concurrently about 200 ms, even on a single thread if the I/O is non-blocking, because the time is spent waiting."
+  columns={['Approach', 'Timeline', 'Total']}
+  rows={[
+    ['Sequential', 'call 1 (0–200), call 2 (200–400), call 3 (400–600)', '~600 ms'],
+    ['Concurrent (I/O-bound)', 'calls 1, 2 and 3 all start at 0 and wait together', '~200 ms'],
+  ]}
+/>
+
+## Choose by workload
+
+- **I/O-bound** work (waiting for networks and databases) benefits from **concurrency**. Do not block threads while waiting.
+- **CPU-bound** work (hashing, parsing) benefits from **parallelism**, bounded by the number of cores. More threads than cores adds only context switching.
+| Model | When it is interesting |
+| --- | --- |
+| Traditional thread pool | Simple model and controlled concurrency |
+| Event loop | Many non-blocking I/O operations |
+| Coroutines | Structured concurrency and readable asynchronous code |
+| Virtual threads | High concurrency with a blocking programming style |
+
+- Never run a blocking call on a dispatcher meant for CPU work (`Dispatchers.Default`): with only as many threads as cores, a few blocked calls stall everything.
+
+## Pitfalls
+
+- **`runBlocking` in request handlers** blocks a server thread until the coroutines finish, undoing the benefit. Use it only in `main` or tests.
+- **Cancellation is cooperative.** A coroutine is cancelled at suspension points; a blocking JDBC call or a busy loop ignores it. Use cancellable APIs, or check `isActive` / call `ensureActive()` in long computations.
+- **`Dispatchers.IO` is bounded** (64 threads by default, or the number of cores if higher). Use `Dispatchers.IO.limitedParallelism(n)` to give a slow dependency its own bounded slice.
+- **Do not pool virtual threads.** They are meant to be created per task; limit access to scarce resources with semaphores or pools, not by limiting threads. Large `ThreadLocal` values per virtual thread also add up quickly.

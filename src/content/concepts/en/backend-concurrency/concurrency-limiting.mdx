@@ -1,0 +1,95 @@
+---
+id: concurrency-limiting
+title: Concurrency limiting
+topic: backend-concurrency
+order: 11
+learningObjective: Implement a semaphore and understand connection pools.
+summary: Cap how many tasks use a scarce resource at once, so excess work waits instead of overloading it.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+Starting everything at once is not always good: a database, a payment provider or the CPU can only serve so much concurrently. A **concurrency limit** lets at most *N* tasks use the resource and queues the rest.
+
+## Semaphore
+
+A **semaphore** holds *N* permits. A task acquires one before using the resource and releases it afterwards.
+
+```java
+private final Semaphore permits = new Semaphore(10);   // at most 10 concurrent calls
+
+public Receipt charge(Payment payment) throws InterruptedException {
+    permits.acquire();
+    try {
+        return gateway.charge(payment);
+    } finally {
+        permits.release();     // always release, even on failure
+    }
+}
+```
+
+```kotlin
+private val permits = Semaphore(10)   // kotlinx.coroutines.sync.Semaphore: waiting suspends, it does not block
+
+suspend fun charge(payment: Payment): Receipt = permits.withPermit { gateway.charge(payment) }
+```
+
+If waiting is not acceptable, reject the excess instead:
+
+```java
+if (!semaphore.tryAcquire()) {
+    throw new ServiceOverloadedException();
+}
+```
+
+<StaticWalkthrough
+  caption="A semaphore with 3 permits and 7 simultaneous requests: 3 run and the other 4 wait or are rejected, depending on the policy."
+  columns={['Requests', 'Permits available', 'Outcome']}
+  rows={[
+    ['7 arrive at once', '3', '3 run, 4 are left over'],
+    ['4 left over', '0', 'wait for a permit, or are rejected with tryAcquire'],
+    ['a running call finishes and releases', '1', 'one waiting request enters'],
+  ]}
+/>
+
+The difference from a mutex: a mutex allows **one** protected execution at a time, a semaphore allows **N**. A local semaphore is also not a global limit across several pods: 5 pods with 20 permits each can send 100 simultaneous calls.
+
+Typical use: fan-out over many items (`items.map { async { limited { call(it) } } }`) without flooding a downstream service.
+
+## Connection pools
+
+A **connection pool** (for example HikariCP) is the same idea applied to database connections: a fixed set of reusable connections, because opening one is expensive and the database can only handle a limited number.
+
+| Setting | Meaning |
+| --- | --- |
+| `maximumPoolSize` | The concurrency limit for that database |
+| `connectionTimeout` | How long a request waits for a free connection before failing |
+
+The same idea applies to HTTP clients (`maxConnections: 50` is an illustrative setting, as is a database pool of 20). When all connections are in use, new requests wait, and after `connectionTimeout` they fail.
+
+## Typical failure: pool exhaustion
+
+```java
+@Transactional
+public void pay(long orderId) {
+    Order order = orders.findById(orderId);       // takes a connection
+    gateway.charge(order.getTotal());             // slow HTTP call, connection held meanwhile
+    order.markPaid();
+}                                                  // connection returned only here
+```
+
+With a pool of 10 and a gateway that takes 3 seconds, 10 slow payments exhaust the pool, and **unrelated** requests fail waiting for a connection. Keep transactions short and make slow calls outside them.
+
+Having thousands of coroutines or virtual threads does not fix that bottleneck: if the database connections are busy, the next operations wait, fail by timeout or are rejected.
+
+## Sizing
+
+- A bigger pool is not automatically better: the database has its own limit, and too many concurrent queries slow each other down. Size it from the database's capacity and the **number of pods** × pool size.
+- Throughput and latency are linked by **Little's law**: concurrent requests in the system = throughput × latency (L = λ·W). 200 requests/s at 50 ms need about 10 concurrent slots; at 500 ms they need 100. If latency grows, the same load needs more concurrency, which is how slowdowns snowball.
+
+## More worth knowing
+
+- **A starting point for pool size**, from the PostgreSQL wiki and HikariCP's docs: `connections ≈ (cores × 2) + effective disks` on the **database** server, shared by all pods. Measure from there.
+- **Pool-locking deadlock**: if a request needs two connections at once (for example it opens a second transaction with `REQUIRES_NEW` while holding the first), N concurrent requests can each hold one connection and wait forever for a second. Avoid nested connections, or size the pool for it.
+- **Separate pools** for critical traffic and batch jobs, so a heavy report cannot exhaust the connections that checkout needs (a bulkhead).
+- **Adaptive limits**: instead of a fixed number, some systems adjust the concurrency limit from observed latency (in the style of TCP congestion control), lowering it when latency rises.
+- `new Semaphore(n, true)` is **fair** (first come, first served) at some throughput cost; the default is not fair.

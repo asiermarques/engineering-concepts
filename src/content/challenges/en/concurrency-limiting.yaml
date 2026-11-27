@@ -1,0 +1,83 @@
+concept: concurrency-limiting
+challenges:
+  - id: cl-1
+    type: multiple-choice
+    prompt: "`Semaphore(5)` guards calls to a payment provider. 20 tasks try to call it at the same time. What happens?"
+    options:
+      - id: a
+        text: 5 run and the other 15 wait for a permit, entering as permits are released.
+        correct: true
+        explanation: The semaphore caps concurrency at its permit count and queues the rest.
+      - id: b
+        text: All 20 run and the semaphore only logs a warning.
+        correct: false
+        explanation: A semaphore enforces the limit, it does not just report it.
+      - id: c
+        text: 15 tasks fail immediately.
+        correct: false
+        explanation: Waiting is the default behaviour. Failing immediately needs `tryAcquire`.
+  - id: cl-2
+    type: multiple-choice
+    prompt: Why must a permit be released in a `finally` block?
+    options:
+      - id: a
+        text: If the call throws, the permit would never return and the semaphore would slowly run out of permits.
+        correct: true
+        explanation: A leaked permit permanently reduces capacity until nothing can proceed.
+      - id: b
+        text: Because `release` is slow and `finally` makes it faster.
+        correct: false
+        explanation: "`finally` has no effect on speed."
+      - id: c
+        text: It is only a style convention.
+        correct: false
+        explanation: It is a correctness requirement.
+  - id: cl-3
+    type: multiple-choice
+    prompt: A `@Transactional` method calls a slow external API while it holds a database connection. With a pool of 10, what can happen under load?
+    options:
+      - id: a
+        text: The pool is exhausted by slow calls, and unrelated requests time out waiting for a connection.
+        correct: true
+        explanation: The connection is held for the whole external call, so the effective capacity becomes 10 slow calls.
+      - id: b
+        text: Nothing, connections are released while waiting for HTTP responses.
+        correct: false
+        explanation: The transaction keeps its connection until it ends.
+      - id: c
+        text: The database creates more connections automatically.
+        correct: false
+        explanation: The pool has a fixed maximum size.
+  - id: cl-4
+    type: multiple-choice
+    prompt: Which statements about sizing a connection pool are true?
+    options:
+      - id: a
+        text: A bigger pool can make things worse by overloading the database with concurrent queries.
+        correct: true
+        explanation: The database has limited capacity. Beyond it, queries slow each other down.
+      - id: b
+        text: The total number of connections is the pool size multiplied by the number of pods.
+        correct: true
+        explanation: Each pod has its own pool, so scaling out multiplies connections.
+      - id: c
+        text: The pool should always be as large as possible.
+        correct: false
+        explanation: More is not better beyond what the database can handle.
+
+  - id: cl-5
+    type: multiple-choice
+    prompt: A payment provider supports 20 simultaneous operations per instance. You have 3 pods, each with a local `Semaphore(20)`. What does that give you?
+    options:
+      - id: a
+        text: Up to 20 per pod, so up to 60 overall. A local semaphore is not a global limit.
+        correct: true
+        explanation: Each pod has its own semaphore in its own memory. A global limit needs shared coordination or a per-pod budget.
+      - id: b
+        text: A global limit of 20 across all pods.
+        correct: false
+        explanation: The semaphores do not know about each other.
+      - id: c
+        text: A limit of 1 because semaphores work like mutexes.
+        correct: false
+        explanation: A semaphore allows N concurrent holders, a mutex allows one.

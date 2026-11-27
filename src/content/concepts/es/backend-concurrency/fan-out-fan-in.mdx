@@ -1,0 +1,65 @@
+---
+id: fan-out-fan-in
+title: Fan-out / fan-in
+topic: backend-concurrency
+order: 10
+learningObjective: Coordinar llamadas REST independientes y gestionar fallos parciales.
+summary: Lanzar juntas las llamadas independientes, esperar a todas y decidir de antemano qué fallos son fatales.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+El **fan-out** lanza varias tareas independientes. El **fan-in** espera a que terminen y combina los resultados. Un servicio de Checkout que necesita información de Stock, Vouchers y Customers no necesita llamar a esos servicios uno tras otro: en secuencia, cada llamada empieza cuando termina la anterior. Las tres pueden progresar concurrentemente, suponiendo que los clientes HTTP soporten este modelo de ejecución o se ejecuten sobre recursos adecuados.
+
+<StaticWalkthrough
+  caption="Tres llamadas REST independientes: en secuencia la latencia es la suma de las tres; con fan-out/fan-in es aproximadamente la de la más lenta."
+  columns={['Llamada', 'Duración', 'En secuencia termina en', 'De forma concurrente termina en']}
+  rows={[
+    ['stock-service', '100 ms', '100 ms', '100 ms'],
+    ['vouchers-service', '200 ms', '300 ms', '200 ms'],
+    ['customers-service', '50 ms', '350 ms', '50 ms (total ≈ 200 ms, 43 % menos)'],
+  ]}
+/>
+
+```kotlin
+suspend fun getCheckout() = coroutineScope {
+    val stock    = async { stockClient.getStock() }
+    val vouchers = async { voucherClient.getVouchers() }
+    val customer = async { customerClient.getCustomer() }
+    Checkout(stock.await(), vouchers.await(), customer.await())
+}
+```
+
+```java
+CompletableFuture<Stock>    stock    = CompletableFuture.supplyAsync(() -> stockClient.getStock(), executor);
+CompletableFuture<Customer> customer = CompletableFuture.supplyAsync(() -> customerClient.getCustomer(), executor);
+CompletableFuture.allOf(stock, customer).join();
+```
+
+## Fallos parciales
+
+Decide **por llamada** qué significa un fallo:
+
+| Llamada | Si falla o es lenta | Estrategia |
+| --- | --- | --- |
+| Stock, cliente | No se puede construir la página | Fallar toda la petición y cancelar el resto |
+| Recomendaciones, puntos de fidelidad | La página sigue siendo útil | Valor por defecto, mostrar la página sin ello |
+
+- La **concurrencia estructurada** mantiene las tareas hijas dentro del ámbito que las lanzó. En `coroutineScope`, cuando falla un hijo los hermanos se **cancelan** y la excepción se propaga. Con `supervisorScope`, un hijo que falla no cancela a sus hermanos, y gestionas cada fallo tú.
+- **La cancelación no es una garantía**: cancelar en el cliente no significa que el servidor remoto haya dejado de procesar una petición que ya recibió.
+- Define un **timeout por llamada** y uno global. Si no, la llamada más lenta o colgada determina la latencia.
+- Acota el fan-out. Llamar a 1000 elementos de forma concurrente necesita un límite de concurrencia (siguiente concepto).
+- Solo se pueden lanzar en fan-out las llamadas **independientes**. Si la llamada B necesita el resultado de la A, siguen siendo secuenciales.
+
+## Amplificación de la latencia de cola
+
+El fan-in espera a la llamada **más lenta**. Si cada dependencia responde lento en el 1 % de las llamadas, una petición que hace fan-out a 100 de ellas es lenta en el 1 − 0,99¹⁰⁰ ≈ **63 %** de los casos. Cuanto más fan-out, más decide tu p99 la cola de las dependencias. Mitigaciones:
+
+- Timeouts ajustados por llamada con valores por defecto para los datos opcionales.
+- **Hedged requests**: si una llamada a una réplica no ha respondido en su p95 habitual, enviar una segunda a otra réplica y quedarse con la primera respuesta (solo para lecturas idempotentes).
+- Reducir el fan-out: endpoints por lotes, caché, vistas precalculadas.
+
+## Trampas en Java
+
+- `CompletableFuture.allOf` **no** cancela los demás futures cuando uno falla, y `cancel(true)` no interrumpe la tarea en ejecución. La cancelación hay que gestionarla explícitamente.
+- `supplyAsync` sin executor usa el `ForkJoinPool.commonPool()` compartido. Las llamadas HTTP bloqueantes ahí dejan sin hilos a todos los demás usuarios de ese pool; pasa un executor dedicado.
+- `StructuredTaskScope` trae a Java la concurrencia estructurada con cancelación automática; empezó como preview en JDK 21 y ha ido evolucionando, así que comprueba su estado en tu JDK.

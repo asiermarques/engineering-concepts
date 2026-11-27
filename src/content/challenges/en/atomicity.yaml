@@ -1,0 +1,87 @@
+concept: atomicity
+challenges:
+  - id: at-1
+    type: multiple-choice
+    prompt: Which approach avoids the lost update when two sales decrement the same stock?
+    options:
+      - id: a
+        text: "`UPDATE stock SET quantity = quantity - 1 WHERE product_id = ? AND quantity >= 1`"
+        correct: true
+        explanation: The check and the decrement are one statement, so the database applies them atomically on the row and never lets quantity go below zero.
+      - id: b
+        text: "`SELECT quantity`, compute `quantity - 1` in the application, then `UPDATE stock SET quantity = :newValue`"
+        correct: false
+        explanation: This is still read-modify-write. Two requests can read the same value and overwrite each other.
+      - id: c
+        text: Run the same read-modify-write twice to be sure.
+        correct: false
+        explanation: Repeating a racy sequence only narrows the window. The interleaving can still happen.
+  - id: at-2
+    type: multiple-choice
+    prompt: "`UPDATE orders SET status = 'PAID' WHERE id = ? AND status = 'PENDING'` affects 0 rows. What does that mean?"
+    options:
+      - id: a
+        text: The order was not in `PENDING` any more (or does not exist), so this request must not charge the customer.
+        correct: true
+        explanation: The affected-row count is the result of the check. Zero means this request did not win the transition.
+      - id: b
+        text: The database failed and the statement must be retried blindly.
+        correct: false
+        explanation: A statement that matches no rows is a normal outcome, not an error. Retrying blindly would not change the answer.
+      - id: c
+        text: The order was paid by this request.
+        correct: false
+        explanation: A successful transition affects exactly one row.
+  - id: at-3
+    type: multiple-choice
+    prompt: A transaction updates the order to `PAID`, calls the payment gateway over HTTP, and then fails and rolls back. What happens to the charge?
+    options:
+      - id: a
+        text: The rollback also reverses the charge.
+        correct: false
+        explanation: A rollback only undoes changes in that database. The gateway is a separate system.
+      - id: b
+        text: The charge stays. You need a compensating action such as a refund.
+        correct: true
+        explanation: External side effects are outside the transaction. This is why sagas and idempotency exist.
+      - id: c
+        text: The gateway automatically detects the rollback.
+        correct: false
+        explanation: The gateway never learns about your database transaction.
+  - id: at-4
+    type: multiple-choice
+    prompt: Which statements about atomic conditional updates are true?
+    options:
+      - id: a
+        text: The condition and the write are evaluated as one step on the row.
+        correct: true
+        explanation: That is what removes the gap between check and act.
+      - id: b
+        text: The affected-row count tells you whether your request won.
+        correct: true
+        explanation: Zero rows means the condition no longer held, one row means your update applied.
+      - id: c
+        text: They also make an HTTP call to a payment provider atomic.
+        correct: false
+        explanation: Atomicity covers the database statement only, not remote calls.
+      - id: d
+        text: The `WHERE` guard is optional if you wrap the statement in a transaction.
+        correct: false
+        explanation: Without the guard, both transactions simply apply their update. The guard is what encodes the invariant.
+
+  - id: at-5
+    type: multiple-choice
+    prompt: "In PostgreSQL, two transactions run `UPDATE orders SET status = 'PAID' WHERE id = 42 AND status = 'PENDING'` at the same time under READ COMMITTED. What does the second one do?"
+    options:
+      - id: a
+        text: It waits for the row lock, re-evaluates the `WHERE` on the committed row, sees `PAID` and updates 0 rows.
+        correct: true
+        explanation: Under READ COMMITTED a blocked UPDATE re-checks its condition on the newest row version, which is why the guard works.
+      - id: b
+        text: It updates the row too, because it read `PENDING` from its snapshot.
+        correct: false
+        explanation: An UPDATE does not apply its change to a stale version. It rechecks the condition after the lock is released.
+      - id: c
+        text: It always fails with a serialization error.
+        correct: false
+        explanation: That is the behaviour under REPEATABLE READ or SERIALIZABLE, not under READ COMMITTED.

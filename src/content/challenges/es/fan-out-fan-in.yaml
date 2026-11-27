@@ -1,0 +1,83 @@
+concept: fan-out-fan-in
+challenges:
+  - id: fo-1
+    type: multiple-choice
+    prompt: Las llamadas a Stock, Vouchers y Customers tardan 100 ms, 200 ms y 50 ms. ¿Cuánto tarda aproximadamente Checkout en secuencia y con fan-out/fan-in?
+    options:
+      - id: a
+        text: Unos 350 ms en secuencia y unos 200 ms con fan-out/fan-in.
+        correct: true
+        explanation: El tiempo secuencial es la suma. El tiempo concurrente es aproximadamente el de la llamada más lenta, porque esperan juntas.
+      - id: b
+        text: Unos 200 ms en ambos casos.
+        correct: false
+        explanation: Las llamadas en secuencia se suman porque cada una empieza cuando termina la anterior.
+      - id: c
+        text: Unos 350 ms en ambos casos.
+        correct: false
+        explanation: Las llamadas independientes lanzadas juntas solapan su tiempo de espera.
+  - id: fo-2
+    type: multiple-choice
+    prompt: "En Kotlin, dentro de `coroutineScope { ... }` uno de los hijos `async` lanza una excepción. ¿Qué pasa con sus hermanos?"
+    options:
+      - id: a
+        text: Se cancelan y la excepción se propaga desde el ámbito.
+        correct: true
+        explanation: La concurrencia estructurada ata los hijos a su ámbito. Un fallo cancela al resto, así que no queda trabajo huérfano ejecutándose.
+      - id: b
+        text: Siguen ejecutándose y la excepción se ignora.
+        correct: false
+        explanation: Ignorar el fallo ocultaría errores y filtraría trabajo.
+      - id: c
+        text: Continúan y la excepción solo se lanza al terminar el programa.
+        correct: false
+        explanation: La excepción se propaga cuando el ámbito termina o cuando haces await del hijo fallido.
+  - id: fo-3
+    type: multiple-choice
+    prompt: El servicio de recomendaciones está caído pero la página de checkout se puede usar sin él. ¿Cuál es el mejor tratamiento?
+    options:
+      - id: a
+        text: Usar un timeout corto y un valor por defecto, como una lista vacía, para que la página se siga mostrando.
+        correct: true
+        explanation: Los datos opcionales no deben convertirse en un checkout fallido. El fallo se convierte en una respuesta degradada.
+      - id: b
+        text: Fallar toda la petición con 500.
+        correct: false
+        explanation: Una dependencia opcional reduciría la disponibilidad del flujo crítico.
+      - id: c
+        text: Reintentar indefinidamente hasta que responda.
+        correct: false
+        explanation: Hace que cada petición espere a una dependencia opcional.
+  - id: fo-4
+    type: multiple-choice
+    prompt: ¿Qué llamadas NO se pueden lanzar en fan-out?
+    options:
+      - id: a
+        text: Una llamada cuya entrada es el resultado de una llamada anterior, como calcular el precio de un carrito con el id devuelto por una llamada anterior.
+        correct: true
+        explanation: Una dependencia de datos fuerza un orden. Solo las llamadas independientes pueden ejecutarse juntas.
+      - id: b
+        text: Las consultas de stock y de cliente que solo necesitan el id del pedido.
+        correct: false
+        explanation: Ninguna necesita el resultado de la otra, así que pueden ejecutarse juntas.
+      - id: c
+        text: Dos llamadas a servicios distintos con timeouts distintos.
+        correct: false
+        explanation: Timeouts distintos no crean una dependencia.
+
+  - id: fo-5
+    type: multiple-choice
+    prompt: Cada una de 100 llamadas a backends es lenta en el 1 % de los casos. Una petición hace fan-out a las 100 y espera todas las respuestas. ¿Con qué frecuencia aproximada es lenta la petición?
+    options:
+      - id: a
+        text: Alrededor del 63 % de las veces.
+        correct: true
+        explanation: 1 − 0,99^100 ≈ 0,63. Esperar a todas las llamadas hace que la más lenta decida la latencia.
+      - id: b
+        text: Alrededor del 1 % de las veces, como cada llamada.
+        correct: false
+        explanation: Eso solo sería cierto si la petición dependiera de una única llamada.
+      - id: c
+        text: Nunca, porque las llamadas se ejecutan de forma concurrente.
+        correct: false
+        explanation: La concurrencia elimina la suma de latencias, no la espera a la llamada más lenta.

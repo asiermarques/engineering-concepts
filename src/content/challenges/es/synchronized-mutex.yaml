@@ -1,0 +1,83 @@
+concept: synchronized-mutex
+challenges:
+  - id: sm-1
+    type: multiple-choice
+    prompt: "`PaymentService.pay` es `synchronized`. El servicio corre en 3 pods detrás de un balanceador. ¿Se puede cobrar dos veces el mismo pedido?"
+    options:
+      - id: a
+        text: Sí. Cada pod tiene su propio monitor, así que las peticiones en pods distintos ejecutan la sección crítica a la vez.
+        correct: true
+        explanation: Un monitor vive en la memoria de una JVM. No puede coordinar hilos de otros procesos.
+      - id: b
+        text: No. `synchronized` lo impone el balanceador.
+        correct: false
+        explanation: El balanceador no sabe nada de monitores. `synchronized` es una característica de la JVM.
+      - id: c
+        text: No. `synchronized` bloquea la fila de la base de datos.
+        correct: false
+        explanation: Nunca toca la base de datos. Solo protege un objeto monitor dentro de la JVM.
+  - id: sm-2
+    type: multiple-choice
+    prompt: ¿Por qué poner `synchronized` en todo el método `PaymentService.pay` es un problema de throughput incluso con un solo pod?
+    options:
+      - id: a
+        text: Serializa los pagos de todos los pedidos, no solo de los que chocan.
+        correct: true
+        explanation: Un monitor para todas las llamadas hace que pedidos sin relación se esperen entre sí. Un lock por id de pedido limita la espera a los conflictos reales.
+      - id: b
+        text: Porque `synchronized` es más lento que cualquier lock de base de datos.
+        correct: false
+        explanation: No existe esa regla. El coste viene del alcance del lock, no de la palabra clave.
+      - id: c
+        text: Porque hace el código no atómico.
+        correct: false
+        explanation: Sí hace la sección mutuamente excluyente en esa JVM. El problema es la exclusión innecesaria.
+  - id: sm-3
+    type: multiple-choice
+    prompt: ¿Qué ventaja tiene `Mutex.withLock` frente a `synchronized` dentro de una corrutina de Kotlin?
+    options:
+      - id: a
+        text: Una corrutina que espera el lock se suspende y libera su hilo en vez de bloquearlo.
+        correct: true
+        explanation: La suspensión permite que el hilo ejecute otras corrutinas. Un hilo bloqueado se desperdicia mientras espera.
+      - id: b
+        text: Funciona entre varios pods.
+        correct: false
+        explanation: Un `Mutex` también es local al proceso.
+      - id: c
+        text: Elimina la necesidad de una sección crítica.
+        correct: false
+        explanation: Sigue definiendo una sección crítica, solo que de forma suspendible.
+  - id: sm-4
+    type: multiple-choice
+    prompt: ¿En qué caso es apropiado un lock local?
+    options:
+      - id: a
+        text: Proteger una caché en memoria que usa un solo proceso.
+        correct: true
+        explanation: Todos los competidores son hilos de la misma JVM, así que un lock local los ve a todos.
+      - id: b
+        text: Evitar que dos pods paguen el mismo pedido.
+        correct: false
+        explanation: Los competidores están en procesos distintos, que un lock local no puede coordinar.
+      - id: c
+        text: Evitar que dos servicios vendan de más una fila de stock en una base de datos compartida.
+        correct: false
+        explanation: El estado compartido está en la base de datos. Usa una actualización atómica, versionado o locks de fila.
+
+  - id: sm-5
+    type: multiple-choice
+    prompt: "Un método de un servicio Spring es a la vez `synchronized` y `@Transactional`, y se ejecuta en un solo pod. ¿Pueden dos peticiones pagar dos veces el mismo pedido?"
+    options:
+      - id: a
+        text: Sí. La transacción se confirma en el proxy cuando el método ya ha terminado, así que el lock se libera antes del commit y el siguiente hilo puede leer el estado antiguo.
+        correct: true
+        explanation: El lock y la transacción tienen límites distintos. Pon el lock fuera de la transacción o, mejor, usa un mecanismo de base de datos.
+      - id: b
+        text: No. `synchronized` también retrasa el commit hasta que se libera el lock.
+        correct: false
+        explanation: El monitor no sabe nada de la transacción. Se libera cuando termina el cuerpo del método.
+      - id: c
+        text: No, `@Transactional` serializa todas las llamadas al método.
+        correct: false
+        explanation: Una transacción no serializa a los llamantes. Las transacciones concurrentes se ejecutan a la vez.

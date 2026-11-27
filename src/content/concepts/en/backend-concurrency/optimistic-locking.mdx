@@ -1,0 +1,109 @@
+---
+id: optimistic-locking
+title: Optimistic locking
+topic: backend-concurrency
+order: 4
+learningObjective: Implement concurrency control with versioning and conditional updates.
+summary: Assume conflicts are rare, detect them at write time with a version, and retry or report them.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+**Optimistic locking** takes no lock while reading. Each row carries a **version**, and the write succeeds only if the version is still the one you read. If someone else wrote first, your update matches no row and you know there was a conflict.
+
+```sql
+-- the row as read: id = 7, balance = 100, version = 3
+UPDATE accounts
+SET    balance = 70,
+       version = version + 1
+WHERE  id = 7
+  AND  version = 3;
+-- affected rows = 1 → you won; 0 → someone else changed the row
+```
+
+<StaticWalkthrough
+  caption="Two clients edit the same account with versioning: the second write finds version 4 instead of 3, affects 0 rows and must reload and retry."
+  columns={['Client A', 'Client B', 'Row in the database']}
+  rows={[
+    ['read: balance 100, version 3', '', 'balance 100, version 3'],
+    ['', 'read: balance 100, version 3', 'balance 100, version 3'],
+    ['UPDATE ... WHERE version = 3 → 1 row', '', 'balance 70, version 4'],
+    ['', 'UPDATE ... WHERE version = 3 → 0 rows (conflict)', 'balance 70, version 4'],
+    ['', 'reload: balance 70, version 4', 'balance 70, version 4'],
+    ['', 'UPDATE ... WHERE version = 4 → 1 row', 'balance 40, version 5'],
+  ]}
+/>
+
+## In code
+
+```java
+@Entity
+class Account {
+    @Id Long id;
+    long balance;
+    @Version long version;   // JPA adds "AND version = ?" and throws on conflict
+}
+
+try {
+    accountService.withdraw(7L, 30);
+} catch (OptimisticLockException e) {
+    // reload and retry a few times, or answer 409 Conflict
+}
+```
+
+```kotlin
+tailrec fun withdraw(id: Long, amount: Long, attempts: Int = 3) {
+    val account = repository.find(id)
+    val updated = repository.updateIfVersion(id, account.balance - amount, account.version)
+    if (!updated) {
+        check(attempts > 1) { "Too many conflicts" }
+        withdraw(id, amount, attempts - 1)
+    }
+}
+```
+
+## Over HTTP
+
+The `ETag` header plays the role of the version. The client sends it back with `If-Match`:
+
+```http
+PUT /accounts/7 HTTP/1.1
+If-Match: "3"
+Content-Type: application/json
+
+{"balance": 70}
+```
+
+```http
+HTTP/1.1 412 Precondition Failed
+```
+
+## Optimistic versus pessimistic
+
+| | Optimistic | Pessimistic |
+| --- | --- | --- |
+| Strategy | Detect conflicts | Prevent incompatible modifications |
+| Moment | When updating | Before operating |
+| On a conflict | Rejects the update | Normally waits |
+| Low contention | Very suitable | May be unnecessary |
+| High contention | Many retries | Can reduce wasted work |
+| Risk | Too many retries | Blocking and deadlocks |
+
+## What does the second request do?
+
+- Read the resource again, recompute the operation and retry.
+- Return an HTTP `409` conflict.
+- Ask the user to review the updated state.
+
+Retrying automatically is not always correct: if someone is editing a document, for example, you could overwrite another person's changes.
+
+**Advantage:** you do not keep the resource locked while the client works. **Disadvantage:** with many conflicts you waste work and generate many retries. Neither strategy is universally better: it depends on contention, transaction duration and the cost of repeating an operation.
+
+Retrying is only safe if the work before the update has no external side effects, or if those effects are idempotent.
+
+## Pitfalls in practice
+
+- **The version must travel with the client.** If the API loads the entity, applies the request body and saves it in the same request, the version check only protects those few milliseconds, not the minutes the user spent editing. Return the version (or `ETag`) on `GET` and require it on the update.
+- **Force the precondition**: answer `428 Precondition Required` when an update arrives without `If-Match`, so clients cannot skip the check. `If-Match` uses strong comparison, so weak ETags (`W/"3"`) do not work with it.
+- **Retry in a new transaction.** After an `OptimisticLockException` the transaction is marked for rollback and the persistence context holds stale data. The retry has to wrap the whole transactional method, not loop inside it. In Spring the exception arrives as `ObjectOptimisticLockingFailureException`.
+- **JPA checks at flush or commit**, so the exception may appear later than the line that changed the entity.
+- **Bulk updates** (`UPDATE ... WHERE ...` in JPQL) bypass `@Version` unless you increment it yourself.

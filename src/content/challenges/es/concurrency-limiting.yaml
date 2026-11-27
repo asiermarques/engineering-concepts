@@ -1,0 +1,83 @@
+concept: concurrency-limiting
+challenges:
+  - id: cl-1
+    type: multiple-choice
+    prompt: "`Semaphore(5)` protege las llamadas a un proveedor de pagos. 20 tareas intentan llamarlo a la vez. ¿Qué pasa?"
+    options:
+      - id: a
+        text: 5 se ejecutan y las otras 15 esperan un permiso, entrando según se liberan.
+        correct: true
+        explanation: El semáforo limita la concurrencia a su número de permisos y encola el resto.
+      - id: b
+        text: Se ejecutan las 20 y el semáforo solo registra una advertencia.
+        correct: false
+        explanation: Un semáforo impone el límite, no solo lo informa.
+      - id: c
+        text: 15 tareas fallan de inmediato.
+        correct: false
+        explanation: Esperar es el comportamiento por defecto. Fallar de inmediato requiere `tryAcquire`.
+  - id: cl-2
+    type: multiple-choice
+    prompt: ¿Por qué hay que liberar un permiso en un bloque `finally`?
+    options:
+      - id: a
+        text: Si la llamada lanza una excepción, el permiso no volvería nunca y el semáforo se iría quedando sin permisos.
+        correct: true
+        explanation: Un permiso perdido reduce la capacidad de forma permanente hasta que nada puede avanzar.
+      - id: b
+        text: Porque `release` es lento y `finally` lo hace más rápido.
+        correct: false
+        explanation: "`finally` no afecta a la velocidad."
+      - id: c
+        text: Es solo una convención de estilo.
+        correct: false
+        explanation: Es un requisito de corrección.
+  - id: cl-3
+    type: multiple-choice
+    prompt: Un método `@Transactional` llama a una API externa lenta mientras retiene una conexión de base de datos. Con un pool de 10, ¿qué puede pasar bajo carga?
+    options:
+      - id: a
+        text: Las llamadas lentas agotan el pool, y peticiones sin relación vencen su timeout esperando una conexión.
+        correct: true
+        explanation: La conexión se retiene durante toda la llamada externa, así que la capacidad efectiva pasa a ser 10 llamadas lentas.
+      - id: b
+        text: Nada, las conexiones se liberan mientras se espera la respuesta HTTP.
+        correct: false
+        explanation: La transacción conserva su conexión hasta que termina.
+      - id: c
+        text: La base de datos crea más conexiones automáticamente.
+        correct: false
+        explanation: El pool tiene un tamaño máximo fijo.
+  - id: cl-4
+    type: multiple-choice
+    prompt: ¿Qué afirmaciones sobre dimensionar un connection pool son verdaderas?
+    options:
+      - id: a
+        text: Un pool más grande puede empeorar las cosas al sobrecargar la base de datos con consultas concurrentes.
+        correct: true
+        explanation: La base de datos tiene una capacidad limitada. Por encima de ella, las consultas se ralentizan entre sí.
+      - id: b
+        text: El número total de conexiones es el tamaño del pool multiplicado por el número de pods.
+        correct: true
+        explanation: Cada pod tiene su propio pool, así que escalar multiplica las conexiones.
+      - id: c
+        text: El pool debe ser siempre lo más grande posible.
+        correct: false
+        explanation: Más no es mejor más allá de lo que la base de datos puede manejar.
+
+  - id: cl-5
+    type: multiple-choice
+    prompt: Un proveedor de pagos soporta 20 operaciones simultáneas por instancia. Tienes 3 pods, cada uno con un `Semaphore(20)` local. ¿Qué consigues?
+    options:
+      - id: a
+        text: Hasta 20 por pod, o sea hasta 60 en total. Un semáforo local no es un límite global.
+        correct: true
+        explanation: Cada pod tiene su propio semáforo en su propia memoria. Un límite global necesita coordinación compartida o un reparto por pod.
+      - id: b
+        text: Un límite global de 20 entre todos los pods.
+        correct: false
+        explanation: Los semáforos no se conocen entre sí.
+      - id: c
+        text: Un límite de 1 porque los semáforos funcionan como mutex.
+        correct: false
+        explanation: Un semáforo permite N titulares concurrentes, un mutex permite uno.

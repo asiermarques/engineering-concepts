@@ -1,0 +1,87 @@
+concept: atomicity
+challenges:
+  - id: at-1
+    type: multiple-choice
+    prompt: ¿Qué enfoque evita el lost update cuando dos ventas decrementan el mismo stock?
+    options:
+      - id: a
+        text: "`UPDATE stock SET quantity = quantity - 1 WHERE product_id = ? AND quantity >= 1`"
+        correct: true
+        explanation: La comprobación y el decremento son una sola sentencia, así que la base de datos los aplica de forma atómica sobre la fila y nunca deja la cantidad por debajo de cero.
+      - id: b
+        text: "`SELECT quantity`, calcular `quantity - 1` en la aplicación y luego `UPDATE stock SET quantity = :newValue`"
+        correct: false
+        explanation: Sigue siendo read-modify-write. Dos peticiones pueden leer el mismo valor y pisarse.
+      - id: c
+        text: Ejecutar dos veces el mismo read-modify-write para estar seguros.
+        correct: false
+        explanation: Repetir una secuencia con carrera solo estrecha la ventana. El intercalado sigue siendo posible.
+  - id: at-2
+    type: multiple-choice
+    prompt: "`UPDATE orders SET status = 'PAID' WHERE id = ? AND status = 'PENDING'` afecta a 0 filas. ¿Qué significa?"
+    options:
+      - id: a
+        text: El pedido ya no estaba en `PENDING` (o no existe), así que esta petición no debe cobrar al cliente.
+        correct: true
+        explanation: El número de filas afectadas es el resultado de la comprobación. Cero significa que esta petición no ganó la transición.
+      - id: b
+        text: La base de datos ha fallado y hay que reintentar a ciegas.
+        correct: false
+        explanation: Una sentencia que no coincide con ninguna fila es un resultado normal, no un error. Reintentar a ciegas no cambiaría la respuesta.
+      - id: c
+        text: El pedido lo ha pagado esta petición.
+        correct: false
+        explanation: Una transición correcta afecta exactamente a una fila.
+  - id: at-3
+    type: multiple-choice
+    prompt: Una transacción pasa el pedido a `PAID`, llama a la pasarela de pago por HTTP y después falla y hace rollback. ¿Qué pasa con el cobro?
+    options:
+      - id: a
+        text: El rollback también revierte el cobro.
+        correct: false
+        explanation: Un rollback solo deshace cambios en esa base de datos. La pasarela es otro sistema.
+      - id: b
+        text: El cobro se mantiene. Hace falta una acción compensatoria, como un reembolso.
+        correct: true
+        explanation: Los efectos externos quedan fuera de la transacción. Por eso existen las sagas y la idempotencia.
+      - id: c
+        text: La pasarela detecta el rollback automáticamente.
+        correct: false
+        explanation: La pasarela nunca se entera de tu transacción de base de datos.
+  - id: at-4
+    type: multiple-choice
+    prompt: ¿Qué afirmaciones sobre las actualizaciones condicionales atómicas son verdaderas?
+    options:
+      - id: a
+        text: La condición y la escritura se evalúan como un solo paso sobre la fila.
+        correct: true
+        explanation: Eso es lo que elimina el hueco entre comprobar y actuar.
+      - id: b
+        text: El número de filas afectadas indica si tu petición ganó.
+        correct: true
+        explanation: Cero filas significa que la condición ya no se cumplía; una fila, que tu actualización se aplicó.
+      - id: c
+        text: También hacen atómica una llamada HTTP a un proveedor de pagos.
+        correct: false
+        explanation: La atomicidad cubre solo la sentencia de base de datos, no las llamadas remotas.
+      - id: d
+        text: La guarda del `WHERE` es opcional si envuelves la sentencia en una transacción.
+        correct: false
+        explanation: Sin la guarda, las dos transacciones aplican su actualización. La guarda es lo que codifica el invariante.
+
+  - id: at-5
+    type: multiple-choice
+    prompt: "En PostgreSQL, dos transacciones ejecutan a la vez `UPDATE orders SET status = 'PAID' WHERE id = 42 AND status = 'PENDING'` con READ COMMITTED. ¿Qué hace la segunda?"
+    options:
+      - id: a
+        text: Espera el lock de la fila, vuelve a evaluar el `WHERE` sobre la fila confirmada, ve `PAID` y actualiza 0 filas.
+        correct: true
+        explanation: Con READ COMMITTED un UPDATE bloqueado recomprueba su condición sobre la versión más reciente de la fila, y por eso la guarda funciona.
+      - id: b
+        text: También actualiza la fila, porque leyó `PENDING` de su snapshot.
+        correct: false
+        explanation: Un UPDATE no aplica su cambio sobre una versión antigua. Recomprueba la condición cuando se libera el lock.
+      - id: c
+        text: Siempre falla con un error de serialización.
+        correct: false
+        explanation: Ese es el comportamiento con REPEATABLE READ o SERIALIZABLE, no con READ COMMITTED.

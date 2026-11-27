@@ -1,0 +1,83 @@
+concept: optimistic-locking
+challenges:
+  - id: ol-1
+    type: multiple-choice
+    prompt: "`UPDATE accounts SET balance = ?, version = version + 1 WHERE id = ? AND version = ?` affects 0 rows. What should the code do?"
+    options:
+      - id: a
+        text: Treat it as a conflict, reload the row and retry a bounded number of times, or report 409.
+        correct: true
+        explanation: Zero rows means another writer changed the version. The data you based your decision on is stale.
+      - id: b
+        text: Ignore it, the balance was updated anyway.
+        correct: false
+        explanation: Nothing was written. Ignoring it silently loses the user's change.
+      - id: c
+        text: Run the same update again without reloading.
+        correct: false
+        explanation: The version in the `WHERE` is stale, so it would fail again every time.
+  - id: ol-2
+    type: multiple-choice
+    prompt: When is optimistic locking a good fit?
+    options:
+      - id: a
+        text: Conflicts are rare, for example users editing their own profile.
+        correct: true
+        explanation: Retries are rare, so the lack of locks is a pure gain.
+      - id: b
+        text: Thousands of requests update the same hot row, such as a global counter.
+        correct: false
+        explanation: Most attempts would fail and retry, wasting work. An atomic update or a pessimistic lock fits better.
+      - id: c
+        text: It is always better because it never waits.
+        correct: false
+        explanation: Not waiting is paid for with wasted work under contention.
+  - id: ol-3
+    type: multiple-choice
+    prompt: "A client sends `PUT /accounts/7` with `If-Match: \"3\"` but the current `ETag` is `\"4\"`. What should the server answer?"
+    options:
+      - id: a
+        text: 412 Precondition Failed
+        correct: true
+        explanation: The precondition expressed by `If-Match` does not hold, so the write must not be applied.
+      - id: b
+        text: 200 OK, applying the update anyway.
+        correct: false
+        explanation: That would defeat the purpose of the version check and overwrite the newer change.
+      - id: c
+        text: 404 Not Found
+        correct: false
+        explanation: The resource exists. The problem is a stale version, not a missing resource.
+  - id: ol-4
+    type: multiple-choice
+    prompt: Which statements about optimistic locking are true?
+    options:
+      - id: a
+        text: It does not hold database locks while the user or the application is thinking.
+        correct: true
+        explanation: The check is only done by the conditional update.
+      - id: b
+        text: The conflict is detected when writing, not when reading.
+        correct: true
+        explanation: Reads are free. Only the `WHERE version = ?` of the write reveals the conflict.
+      - id: c
+        text: Retrying is always safe, whatever the code did before the update.
+        correct: false
+        explanation: If the code already caused external side effects, such as charging a card, retrying repeats them unless they are idempotent.
+
+  - id: ol-5
+    type: multiple-choice
+    prompt: "`PUT /products/123` loads the entity (with `@Version`), copies the request body onto it and saves it. The client never sends a version. What does the version check protect?"
+    options:
+      - id: a
+        text: Only the few milliseconds inside that request, not the time the user spent editing, so edits from two users can still overwrite each other.
+        correct: true
+        explanation: The version compared is the one read in the same request. The client must send the version it saw, for example with `If-Match`.
+      - id: b
+        text: The whole editing session of the user.
+        correct: false
+        explanation: Nothing links the update to what the user saw when they started editing.
+      - id: c
+        text: Nothing at all, `@Version` only works with pessimistic locks.
+        correct: false
+        explanation: It is the optimistic mechanism. Here it is just checking the wrong window.

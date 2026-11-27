@@ -1,0 +1,95 @@
+---
+id: concurrency-limiting
+title: Concurrency limiting
+topic: backend-concurrency
+order: 11
+learningObjective: Implementar un semáforo y entender los connection pools.
+summary: Limitar cuántas tareas usan un recurso escaso a la vez, para que el trabajo sobrante espere en vez de sobrecargarlo.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+Lanzarlo todo a la vez no siempre es buena idea: una base de datos, un proveedor de pagos o la CPU solo pueden atender una cantidad concurrente limitada. Un **límite de concurrencia** deja que como máximo *N* tareas usen el recurso y encola el resto.
+
+## Semáforo
+
+Un **semáforo** tiene *N* permisos. Una tarea adquiere uno antes de usar el recurso y lo libera después.
+
+```java
+private final Semaphore permits = new Semaphore(10);   // como máximo 10 llamadas concurrentes
+
+public Receipt charge(Payment payment) throws InterruptedException {
+    permits.acquire();
+    try {
+        return gateway.charge(payment);
+    } finally {
+        permits.release();     // liberar siempre, incluso si falla
+    }
+}
+```
+
+```kotlin
+private val permits = Semaphore(10)   // kotlinx.coroutines.sync.Semaphore: esperar suspende, no bloquea
+
+suspend fun charge(payment: Payment): Receipt = permits.withPermit { gateway.charge(payment) }
+```
+
+Si esperar no es aceptable, rechaza el exceso:
+
+```java
+if (!semaphore.tryAcquire()) {
+    throw new ServiceOverloadedException();
+}
+```
+
+<StaticWalkthrough
+  caption="Un semáforo con 3 permisos y 7 peticiones simultáneas: 3 se ejecutan y las otras 4 esperan o se rechazan, según la política."
+  columns={['Peticiones', 'Permisos disponibles', 'Resultado']}
+  rows={[
+    ['llegan 7 a la vez', '3', '3 se ejecutan, sobran 4'],
+    ['4 sobrantes', '0', 'esperan un permiso, o se rechazan con tryAcquire'],
+    ['una llamada en curso termina y libera', '1', 'entra una petición en espera'],
+  ]}
+/>
+
+La diferencia con un mutex: un mutex permite **una** ejecución protegida a la vez, un semáforo permite **N**. Un semáforo local tampoco es un límite global entre varios pods: 5 pods con 20 permisos cada uno pueden enviar 100 llamadas simultáneas.
+
+Uso típico: un fan-out sobre muchos elementos (`items.map { async { limited { call(it) } } }`) sin inundar un servicio downstream.
+
+## Connection pools
+
+Un **connection pool** (por ejemplo HikariCP) es la misma idea aplicada a las conexiones de base de datos: un conjunto fijo de conexiones reutilizables, porque abrir una es caro y la base de datos solo soporta un número limitado.
+
+| Ajuste | Significado |
+| --- | --- |
+| `maximumPoolSize` | El límite de concurrencia para esa base de datos |
+| `connectionTimeout` | Cuánto espera una petición una conexión libre antes de fallar |
+
+La misma idea se aplica a los clientes HTTP (`maxConnections: 50` es un ajuste ilustrativo, igual que un pool de base de datos de 20). Cuando todas las conexiones están en uso, las peticiones nuevas esperan, y tras `connectionTimeout` fallan.
+
+## Fallo típico: agotamiento del pool
+
+```java
+@Transactional
+public void pay(long orderId) {
+    Order order = orders.findById(orderId);       // toma una conexión
+    gateway.charge(order.getTotal());             // llamada HTTP lenta, conexión retenida mientras tanto
+    order.markPaid();
+}                                                  // la conexión se devuelve solo aquí
+```
+
+Con un pool de 10 y una pasarela que tarda 3 segundos, 10 pagos lentos agotan el pool y peticiones **sin relación** fallan esperando una conexión. Mantén las transacciones cortas y haz las llamadas lentas fuera de ellas.
+
+Tener miles de corrutinas o virtual threads no soluciona ese cuello de botella: si las conexiones a la base de datos están ocupadas, las siguientes operaciones esperan, fallan por timeout o se rechazan.
+
+## Dimensionado
+
+- Un pool más grande no es automáticamente mejor: la base de datos tiene su propio límite, y demasiadas consultas concurrentes se ralentizan entre sí. Dimensiónalo según la capacidad de la base de datos y el **número de pods** × tamaño del pool.
+- Throughput y latencia están ligados por la **ley de Little**: peticiones concurrentes en el sistema = throughput × latencia (L = λ·W). 200 peticiones/s a 50 ms necesitan unos 10 huecos concurrentes; a 500 ms necesitan 100. Si crece la latencia, la misma carga necesita más concurrencia, que es como se acumulan las ralentizaciones.
+
+## Más cosas que conviene saber
+
+- **Un punto de partida para el tamaño del pool**, según la wiki de PostgreSQL y la documentación de HikariCP: `conexiones ≈ (núcleos × 2) + discos efectivos` del servidor de **base de datos**, compartidas entre todos los pods. Mide a partir de ahí.
+- **Deadlock por pool**: si una petición necesita dos conexiones a la vez (por ejemplo abre una segunda transacción con `REQUIRES_NEW` mientras mantiene la primera), N peticiones concurrentes pueden tener cada una una conexión y esperar para siempre la segunda. Evita las conexiones anidadas o dimensiona el pool para ello.
+- **Pools separados** para el tráfico crítico y los procesos batch, para que un informe pesado no agote las conexiones que necesita el checkout (un bulkhead).
+- **Límites adaptativos**: en vez de un número fijo, algunos sistemas ajustan el límite de concurrencia según la latencia observada (al estilo del control de congestión de TCP), bajándolo cuando sube la latencia.
+- `new Semaphore(n, true)` es **justo** (por orden de llegada) a cambio de algo de throughput; el de por defecto no lo es.

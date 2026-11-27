@@ -1,0 +1,65 @@
+---
+import { render } from 'astro:content';
+import { Assessment } from '../../../features/challenges/Assessment';
+import type { MultipleChoiceChallenge } from '../../../features/challenges/schema';
+import Layout from '../../../features/concept-reading/Layout.astro';
+import { adjacentConcepts } from '../../../features/concept-reading/navigation';
+import { entryLocale, loadContent } from '../../../features/content-validation/loadContent';
+import { locales, ui, type Locale } from '../../../i18n/ui';
+
+export async function getStaticPaths() {
+  const content = await loadContent();
+  return content.concepts.map((entry) => {
+    const locale = entryLocale(entry.id);
+    const siblings = content.concepts
+      .filter((c) => entryLocale(c.id) === locale && c.data.topic === entry.data.topic)
+      .map((c) => ({ id: c.data.id, title: c.data.title, order: c.data.order }));
+    const assessment = content.assessments.find((a) => a.id === `${locale}/${entry.data.id}`);
+    return {
+      params: { locale, id: entry.data.id },
+      props: { entry, siblings, challenges: (assessment?.data.challenges ?? []) as MultipleChoiceChallenge[] },
+    };
+  });
+}
+
+const { entry, siblings, challenges } = Astro.props;
+const locale = Astro.params.locale as Locale;
+const t = ui[locale];
+const { Content } = await render(entry);
+const { previous, next } = adjacentConcepts(siblings, entry.data.id);
+const alternates = Object.fromEntries(locales.map((l) => [l, `/${l}/concepts/${entry.data.id}/`])) as Record<Locale, string>;
+---
+
+<Layout locale={locale} title={entry.data.title} description={entry.data.summary} alternates={alternates}>
+  <p class="breadcrumb"><a href={`/${locale}/`}>{t.backToTopic}</a></p>
+  <article>
+    <h1>{entry.data.title}</h1>
+    <aside class="objective">
+      <strong>{t.learningObjective}:</strong> {entry.data.learningObjective}
+    </aside>
+    <div class="prose">
+      <Content />
+    </div>
+    <section class="assessment-section" aria-labelledby="assessment-heading">
+      <h2 id="assessment-heading" tabindex="-1">{t.assessment.heading}</h2>
+      <noscript><p class="notice">{t.assessment.needsJavascript}</p></noscript>
+      <Assessment client:only="react" challenges={challenges} labels={t.assessment} headingId="assessment-heading" />
+    </section>
+  </article>
+  <nav class="concept-nav" aria-label={t.conceptNavigation}>
+    {
+      previous ? (
+        <a rel="prev" href={`/${locale}/concepts/${previous.id}/`}>
+          <span class="concept-nav__label">← {t.previous}: {previous.title}</span>
+        </a>
+      ) : <span />
+    }
+    {
+      next ? (
+        <a rel="next" href={`/${locale}/concepts/${next.id}/`}>
+          <span class="concept-nav__label">{t.next}: {next.title} →</span>
+        </a>
+      ) : <span />
+    }
+  </nav>
+</Layout>

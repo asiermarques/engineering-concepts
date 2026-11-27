@@ -1,0 +1,91 @@
+---
+id: race-condition
+title: Race condition
+topic: backend-concurrency
+order: 1
+learningObjective: Explain why reading, checking and writing is not safe.
+summary: Two requests interleave between the check and the write, and the outcome depends on timing.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+A **race condition** happens when the result depends on the order in which concurrent operations interleave. The classic shape is **read → check → write** (check-then-act): each step is fine alone, but nothing stops another request from running between them.
+
+## Check-then-act on stock
+
+```java
+int stock = database.getStock(productId);
+
+if (stock > 0) {
+    database.setStock(productId, stock - 1);
+    createOrder();
+}
+```
+
+It looks correct, but reading, checking and writing are **three different operations**, and another request can step in between them: two requests read stock 1, both pass `stock > 0`, and two orders are created for one unit.
+
+## A duplicated payment
+
+```java
+Order order = orders.findById(orderId);          // 1. read
+if (order.getStatus() == Status.PENDING) {       // 2. check
+    gateway.charge(order.getTotal());            // 3. act
+    order.setStatus(Status.PAID);                // 4. write
+    orders.save(order);
+}
+```
+
+The client double-clicks "Pay", or a mobile client retries after a timeout:
+
+```http
+POST /orders/42/pay HTTP/1.1
+POST /orders/42/pay HTTP/1.1
+```
+
+<StaticWalkthrough
+  caption="Two requests pay the same order: both read PENDING before either writes PAID, so the customer is charged twice."
+  columns={['Request A', 'Request B', 'Order status in the database']}
+  rows={[
+    ['read order 42 → PENDING', '', 'PENDING'],
+    ['', 'read order 42 → PENDING', 'PENDING'],
+    ['check: PENDING, OK to charge', '', 'PENDING'],
+    ['', 'check: PENDING, OK to charge', 'PENDING'],
+    ['charge the card', '', 'PENDING'],
+    ['', 'charge the card', 'PENDING'],
+    ['write PAID', 'write PAID', 'PAID (charged twice)'],
+  ]}
+/>
+
+## Lost update
+
+The same interleaving corrupts any read-modify-write, such as a stock counter:
+
+```kotlin
+val stock = repository.stockOf(productId)   // both read 10
+repository.save(productId, stock - 1)       // both write 9: one unit "disappears"
+```
+
+| Symptom | Cause | Example |
+| --- | --- | --- |
+| Duplicated side effect | Check and act are separate steps | Two charges for one order |
+| Lost update | Read-modify-write on shared state | Stock goes from 10 to 9 after two sales |
+| Inconsistent decision | Decision based on data that changed meanwhile | Selling stock that no longer exists |
+
+## What does not fix it
+
+- **Checking more often** only shrinks the window; it does not close it.
+- **Running one pod** hides the problem until you scale out or the load increases.
+- **Tests that pass** prove little: races depend on timing and rarely show up in a single-threaded test.
+
+The next concepts close the window with a different mechanism each: an atomic statement, a local lock, versioning, row locks, idempotency keys and distributed locks.
+
+## Where races hide
+
+- **Uniqueness checks**: `SELECT ... WHERE email = ?` before `INSERT` lets two signups with the same email through. Only a unique constraint closes it.
+- **Retries**: a client or a message broker repeating a request is another concurrent writer.
+- **Scheduled jobs**: a cron job runs on every pod unless something coordinates it.
+- **Caches**: two requests miss at the same time and both recompute and write (a cache stampede).
+- **Time-of-check to time-of-use (TOCTOU)**: any decision based on a value that can change before you act on it.
+
+## Making them visible in tests
+
+A race rarely shows up in a normal test. Start many requests at the same instant (for example, release N threads with a `CountDownLatch`), repeat the test many times, and run it against the real database engine (for example with Testcontainers) instead of an in-memory fake that does not lock like production. Then assert the invariant: one charge, stock never negative.

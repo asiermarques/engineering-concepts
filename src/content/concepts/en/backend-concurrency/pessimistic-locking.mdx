@@ -1,0 +1,93 @@
+---
+id: pessimistic-locking
+title: Pessimistic locking
+topic: backend-concurrency
+order: 5
+learningObjective: Explain SELECT FOR UPDATE and the cost of holding locks.
+summary: Lock the rows you are going to change, do the work, commit; everybody else waits.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+**Pessimistic locking** assumes conflicts will happen and prevents them by locking the rows first. In SQL the tool is `SELECT ... FOR UPDATE`, which locks the selected rows **until the transaction ends**.
+
+```sql
+BEGIN;
+SELECT status, total FROM orders WHERE id = 42 FOR UPDATE;   -- locks the row
+-- the application checks the status and decides
+UPDATE orders SET status = 'PAID' WHERE id = 42;
+COMMIT;                                                       -- releases the lock
+```
+
+<StaticWalkthrough
+  caption="With SELECT FOR UPDATE the second transaction waits for the first one to commit, then reads the new status and stops."
+  columns={['Transaction A', 'Transaction B', 'Row 42']}
+  rows={[
+    ['BEGIN; SELECT ... FOR UPDATE → PENDING', '', 'locked by A'],
+    ['', 'BEGIN; SELECT ... FOR UPDATE → waits', 'locked by A'],
+    ['UPDATE status = PAID; COMMIT', '', 'PAID, unlocked'],
+    ['', 'the SELECT returns: PAID → does not charge', 'PAID'],
+  ]}
+/>
+
+```java
+@Transactional
+public void pay(long orderId) {
+    Order order = em.find(Order.class, orderId, LockModeType.PESSIMISTIC_WRITE); // FOR UPDATE
+    if (order.getStatus() != Status.PENDING) return;
+    order.setStatus(Status.PAID);
+}
+```
+
+```kotlin
+@Query("SELECT o FROM Order o WHERE o.id = :id")
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+fun findForPayment(id: Long): Order?
+```
+
+`FOR UPDATE` takes a lock on the row that protects it against other writes and incompatible locks until the transaction ends. The second request waits until the first one releases the lock; afterwards it can read the updated state or, depending on the isolation level, have to retry its transaction. An ordinary read without `FOR UPDATE` is not necessarily blocked: it depends on the engine and its concurrency model.
+
+## A bad practice
+
+1. Open a transaction.
+2. Lock a database row.
+3. Call a payment provider over REST.
+4. Wait several seconds.
+5. Update the row.
+6. Commit the transaction.
+
+During the whole external call you keep the lock busy, and normally a database connection too.
+
+## Optimistic versus pessimistic
+
+| | Optimistic | Pessimistic |
+| --- | --- | --- |
+| Strategy | Detect conflicts | Prevent incompatible modifications |
+| Moment | When updating | Before operating |
+| On a conflict | Rejects the update | Normally waits |
+| Low contention | Very suitable | May be unnecessary |
+| High contention | Many retries | Can reduce wasted work |
+| Risk | Too many retries | Blocking and deadlocks |
+
+## What holding locks costs
+
+| Cost | Why it hurts |
+| --- | --- |
+| Waiting | Other transactions on the same rows queue behind yours. |
+| Long transactions | Slow work inside the transaction extends everybody's wait. |
+| Pool exhaustion | A transaction keeps its connection; waiting requests pile up. |
+| Deadlocks | Two transactions locking rows in opposite order wait for each other. |
+
+Rules of thumb:
+
+- **Lock only the rows you need**, and keep the transaction short.
+- **Never call external services** (a payment gateway) while holding a row lock.
+- **Lock rows in a consistent order** to avoid deadlocks.
+- `FOR UPDATE` only works inside a transaction. In autocommit mode the lock is released as soon as the statement finishes.
+- `NOWAIT` fails immediately if the row is locked, and `SKIP LOCKED` skips locked rows, which suits workers consuming a job queue.
+
+## Details worth knowing
+
+- **You cannot lock a row that does not exist.** `SELECT ... WHERE email = ? FOR UPDATE` returns nothing and locks nothing in PostgreSQL, so two transactions can both insert. Use a unique constraint (or lock a parent row that always exists). MySQL InnoDB under REPEATABLE READ takes *gap locks* on the empty range instead, which blocks inserts but is a classic source of deadlocks when two transactions do "select for update, then insert".
+- **Bound the wait**: `SET LOCAL lock_timeout = '2s'` in PostgreSQL, `innodb_lock_wait_timeout` in MySQL, or the JPA hint `jakarta.persistence.lock.timeout`. Without it a request can wait far longer than its own timeout.
+- **Weaker lock modes**: `FOR SHARE` lets other readers lock the row too but blocks writers; in PostgreSQL `FOR NO KEY UPDATE` does not block inserts of rows that reference this one by foreign key, which `FOR UPDATE` does.
+- **Locks follow the transaction, not the code**: a lazy-loaded relation or an extra query can lock more rows than you think. Read the SQL your ORM generates.

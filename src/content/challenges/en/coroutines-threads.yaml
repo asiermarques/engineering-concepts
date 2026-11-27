@@ -1,0 +1,83 @@
+concept: coroutines-threads
+challenges:
+  - id: ct-1
+    type: multiple-choice
+    prompt: Which statement describes the difference between concurrency and parallelism?
+    options:
+      - id: a
+        text: Concurrency is tasks overlapping in time, even on one core. Parallelism is tasks running at the same instant on several cores.
+        correct: true
+        explanation: Concurrency is about structure and progress of several tasks. Parallelism is about simultaneous execution.
+      - id: b
+        text: They are synonyms.
+        correct: false
+        explanation: A single-core machine can be concurrent but never parallel.
+      - id: c
+        text: Parallelism needs coroutines and concurrency needs threads.
+        correct: false
+        explanation: Both ideas are independent of the tool that implements them.
+  - id: ct-2
+    type: multiple-choice
+    prompt: A coroutine calls a blocking JDBC query on `Dispatchers.Default`, which has as many threads as cores. Under load, what is the likely result?
+    options:
+      - id: a
+        text: The few threads are all blocked waiting for the database, so other coroutines starve and latency rises.
+        correct: true
+        explanation: Default is sized for CPU-bound work. Blocking calls belong on `Dispatchers.IO` or a dedicated pool.
+      - id: b
+        text: Nothing, coroutines make every call non-blocking automatically.
+        correct: false
+        explanation: A coroutine only suspends at suspending calls. A blocking call still blocks the thread.
+      - id: c
+        text: The JVM creates a new thread for each blocked call.
+        correct: false
+        explanation: The dispatcher has a fixed size and does not grow for blocked work.
+  - id: ct-3
+    type: multiple-choice
+    prompt: What is the difference between `delay(200)` and `Thread.sleep(200)` inside a coroutine?
+    options:
+      - id: a
+        text: "`delay` suspends the coroutine and frees the thread. `Thread.sleep` blocks the thread."
+        correct: true
+        explanation: Suspension lets the thread serve other coroutines while waiting.
+      - id: b
+        text: They are identical.
+        correct: false
+        explanation: Both wait 200 ms, but only one wastes a thread while waiting.
+      - id: c
+        text: "`delay` runs faster because it uses more cores."
+        correct: false
+        explanation: The duration is the same, and neither uses more cores.
+  - id: ct-4
+    type: multiple-choice
+    prompt: Which kind of work benefits most from running more tasks concurrently, even on a few threads?
+    options:
+      - id: a
+        text: I/O-bound work, such as many HTTP or database calls that mostly wait.
+        correct: true
+        explanation: While one task waits, the thread can progress others, so total time approaches the longest wait.
+      - id: b
+        text: CPU-bound work, such as hashing, on a machine with 4 cores and 400 threads.
+        correct: false
+        explanation: CPU-bound work is limited by cores. More threads than cores adds overhead.
+      - id: c
+        text: Only work that never waits.
+        correct: false
+        explanation: Work that never waits gains nothing from overlapping waits.
+
+  - id: ct-5
+    type: multiple-choice
+    prompt: What is the main risk of an event-loop model such as Netty or Node.js?
+    options:
+      - id: a
+        text: Running a blocking or CPU-heavy operation on the event loop thread, which delays every request that depends on that thread.
+        correct: true
+        explanation: A few event-loop threads serve many connections, so blocking one stalls all of them.
+      - id: b
+        text: It needs one thread per connection.
+        correct: false
+        explanation: The point of the model is handling many connections with few threads.
+      - id: c
+        text: It cannot perform network I/O.
+        correct: false
+        explanation: Non-blocking network I/O is exactly what it is good at.

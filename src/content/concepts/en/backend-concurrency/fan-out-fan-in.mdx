@@ -1,0 +1,65 @@
+---
+id: fan-out-fan-in
+title: Fan-out / fan-in
+topic: backend-concurrency
+order: 10
+learningObjective: Coordinate independent REST calls and handle partial failures.
+summary: Start independent calls together, wait for all of them, and decide up front which failures are fatal.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+**Fan-out** starts several independent tasks. **Fan-in** waits for them and combines the results. A Checkout service that needs Stock, Vouchers and Customers information does not need to call those services one after another: sequentially, each call starts when the previous one ends. The three can progress concurrently, assuming the HTTP clients support this execution model or run on suitable resources.
+
+<StaticWalkthrough
+  caption="Three independent REST calls: in sequence the latency is the sum of the three; in fan-out/fan-in it is roughly the slowest one."
+  columns={['Call', 'Duration', 'Sequential finishes at', 'Concurrent finishes at']}
+  rows={[
+    ['stock-service', '100 ms', '100 ms', '100 ms'],
+    ['vouchers-service', '200 ms', '300 ms', '200 ms'],
+    ['customers-service', '50 ms', '350 ms', '50 ms (total ≈ 200 ms, 43% less)'],
+  ]}
+/>
+
+```kotlin
+suspend fun getCheckout() = coroutineScope {
+    val stock    = async { stockClient.getStock() }
+    val vouchers = async { voucherClient.getVouchers() }
+    val customer = async { customerClient.getCustomer() }
+    Checkout(stock.await(), vouchers.await(), customer.await())
+}
+```
+
+```java
+CompletableFuture<Stock>    stock    = CompletableFuture.supplyAsync(() -> stockClient.getStock(), executor);
+CompletableFuture<Customer> customer = CompletableFuture.supplyAsync(() -> customerClient.getCustomer(), executor);
+CompletableFuture.allOf(stock, customer).join();
+```
+
+## Partial failures
+
+Decide **per call** what a failure means:
+
+| Call | If it fails or is slow | Strategy |
+| --- | --- | --- |
+| Stock, customer | The page cannot be built | Fail the whole request, cancel the rest |
+| Recommendations, loyalty points | The page is still useful | Fallback value, show the page without it |
+
+- **Structured concurrency** keeps child tasks inside the scope that started them. In `coroutineScope`, when one child fails the siblings are **cancelled** and the exception propagates. With `supervisorScope`, a failing child does not cancel its siblings, and you handle each failure yourself.
+- **Cancellation is not a guarantee**: cancelling on the client does not mean the remote server stopped processing a request it already received.
+- Set a **timeout per call** and an overall one. Otherwise the slowest or hung call defines the latency.
+- Bound the fan-out. Calling 1000 items concurrently needs a concurrency limit (next concept).
+- Only **independent** calls can fan out. If call B needs the result of call A, they stay sequential.
+
+## Tail latency amplification
+
+Fan-in waits for the **slowest** call. If each dependency answers slowly in 1% of the calls, a request that fans out to 100 of them is slow in 1 − 0.99¹⁰⁰ ≈ **63%** of the cases. The more you fan out, the more your p99 is decided by the dependencies' tails. Mitigations:
+
+- Tight per-call timeouts with fallbacks for optional data.
+- **Hedged requests**: if a call to a replica has not answered by its usual p95, send a second one to another replica and take the first answer (only for idempotent reads).
+- Reduce the fan-out: batch endpoints, caching, precomputed views.
+
+## Java gotchas
+
+- `CompletableFuture.allOf` does **not** cancel the other futures when one fails, and `cancel(true)` does not interrupt the running task. Cancellation has to be handled explicitly.
+- `supplyAsync` without an executor uses the shared `ForkJoinPool.commonPool()`. Blocking HTTP calls there starve every other user of that pool; pass a dedicated executor.
+- Java's `StructuredTaskScope` brings structured concurrency with automatic cancellation; it started as a preview in JDK 21 and has been evolving, so check its status in your JDK.

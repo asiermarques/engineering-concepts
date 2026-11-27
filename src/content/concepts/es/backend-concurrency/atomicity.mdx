@@ -1,0 +1,123 @@
+---
+id: atomicity
+title: Atomicidad
+topic: backend-concurrency
+order: 2
+learningObjective: Resolver un problema de concurrencia con una actualización SQL atómica.
+summary: Mover la comprobación dentro de la escritura convierte leer-comprobar-escribir en una sola sentencia indivisible.
+---
+
+Una operación es **atómica** cuando ninguna otra puede observarla a medias: ocurre entera o no ocurre. La forma más barata de eliminar una carrera suele ser que la comprobación y la escritura sean **una sola sentencia** que la base de datos ejecuta de forma atómica.
+
+## Actualización condicional
+
+En vez de leer el estado y luego escribirlo, pon la condición en la cláusula `WHERE`:
+
+```sql
+UPDATE orders
+SET    status = 'PAID'
+WHERE  id = 42
+  AND  status = 'PENDING';
+```
+
+La base de datos bloquea la fila mientras la evalúa y la actualiza, así que solo una petición concurrente puede pasar el pedido de `PENDING` a `PAID`. El **número de filas afectadas** dice quién ganó:
+
+```java
+int updated = jdbc.update(
+    "UPDATE orders SET status = 'PAID' WHERE id = ? AND status = 'PENDING'", orderId);
+if (updated == 0) {
+    throw new OrderAlreadyPaidException(orderId);   // otra petición llegó antes
+}
+gateway.charge(total);
+```
+
+La misma idea arregla el lost update del stock y además impide que baje de cero:
+
+```sql
+UPDATE stock
+SET    quantity = quantity - 1
+WHERE  product_id = 7
+  AND  quantity >= 1;
+```
+
+```kotlin
+val reserved = jdbc.update(
+    "UPDATE stock SET quantity = quantity - 1 WHERE product_id = ? AND quantity >= 1", productId)
+check(reserved == 1) { "Sin stock" }
+```
+
+## Stock en una tabla de productos
+
+```sql
+UPDATE products
+SET    stock = stock - 1
+WHERE  id = 123
+  AND  stock > 0;
+```
+
+```java
+int affectedRows = database.executeUpdate(sql);
+
+if (affectedRows == 1) {
+    createOrder();
+} else {
+    throw new OutOfStockException();
+}
+```
+
+La base de datos coordina las actualizaciones concurrentes sobre esa fila, así que solo una petición puede llevarse la última unidad. Si crear el pedido y actualizar el stock viven en la **misma base de datos**, deben formar parte de **una misma transacción** para que ambas operaciones se confirmen o se deshagan juntas.
+
+Cuando una operación atómica sencilla puede resolver el problema, prefiérela a mecanismos de bloqueo más complejos.
+
+## Transacciones
+
+Una **transacción** agrupa varias sentencias para que se confirmen o se deshagan juntas. Da atomicidad entre sentencias, por ejemplo al cargar una cuenta y abonar otra:
+
+```sql
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1 AND balance >= 100;
+-- 0 filas afectadas → saldo insuficiente: ROLLBACK, no abonar
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+COMMIT;
+```
+
+La transacción no lo comprueba por ti: si el cargo no coincide con ninguna fila y el código aun así ejecuta el abono y confirma, se crea dinero de la nada. Comprueba siempre las filas afectadas de cada sentencia con guarda.
+
+| Mecanismo | Garantiza | No garantiza |
+| --- | --- | --- |
+| Actualización condicional atómica | Comprobar y escribir es un solo paso sobre esa fila | Nada fuera de la base de datos |
+| Transacción | Varias sentencias se confirman o se deshacen juntas | Por sí sola, que un read seguido de un write esté libre de carreras (depende del nivel de aislamiento) |
+
+## Por qué funciona la actualización condicional, motor a motor
+
+El segundo `UPDATE` no se ejecuta sobre un snapshot antiguo:
+
+- **PostgreSQL, READ COMMITTED**: el segundo `UPDATE` espera el lock de la fila. Cuando el primero confirma, **vuelve a evaluar el `WHERE` sobre la nueva versión de la fila**, ve `PAID` y actualiza 0 filas.
+- **PostgreSQL, REPEATABLE READ o SERIALIZABLE**: en vez de 0 filas, la segunda transacción falla con *could not serialize access due to concurrent update*, y la aplicación tiene que reintentarla.
+- **MySQL InnoDB**: un `UPDATE` siempre lee la última versión confirmada de la fila (una *current read*), incluso con REPEATABLE READ, así que la guarda también se cumple.
+
+El patrón es seguro, pero **cómo se entera el perdedor depende del nivel de aislamiento**: 0 filas afectadas o un error que hay que reintentar.
+
+## Dos significados de «atómico»
+
+- En **ACID**, atomicidad significa *todo o nada ante un fallo*: una caída a mitad nunca deja aplicada la mitad de las sentencias. No dice nada de transacciones concurrentes; eso es el **aislamiento**.
+- En **concurrencia**, una operación atómica es una que otros hilos o transacciones no pueden intercalar: lo que hace segura la actualización condicional es el lock de fila más la recomprobación, no la atomicidad de ACID.
+
+## Herramientas atómicas útiles
+
+```sql
+-- obtener el nuevo valor en la misma sentencia (PostgreSQL)
+UPDATE products SET stock = stock - 1 WHERE id = 123 AND stock > 0 RETURNING stock;
+
+-- «insertar o incrementar» atómico (PostgreSQL)
+INSERT INTO page_views (page_id, views) VALUES (7, 1)
+ON CONFLICT (page_id) DO UPDATE SET views = page_views.views + 1;
+```
+
+En memoria, `AtomicInteger.incrementAndGet()` o `compareAndSet` cumplen el mismo papel dentro de una JVM.
+
+## Límites
+
+- Una transacción **no** hace seguro por defecto un `SELECT` seguido de un `UPDATE`: con `READ COMMITTED` dos transacciones pueden leer el mismo valor. Los niveles de aislamiento se ven más adelante.
+- Un rollback deshace solo cambios en la **base de datos**. Una tarjeta ya cobrada mediante una llamada HTTP no se revierte.
+- Las actualizaciones atómicas sirven cuando el invariante vive en una fila o una sentencia. Si no, hacen falta locks, versiones o una saga.

@@ -1,0 +1,117 @@
+---
+id: resilience
+title: Resilience
+topic: backend-concurrency
+order: 12
+learningObjective: Tell retries, rate limiting, backpressure, circuit breakers and bulkheads apart.
+summary: Each pattern protects a different thing. Timeouts bound waiting, retries recover transient failures, and the rest keep one overloaded part from taking everything down.
+---
+
+Remote calls fail, slow down and sometimes succeed without telling you. These patterns work together, and each answers a different question.
+
+| Pattern | Question it answers | Protects |
+| --- | --- | --- |
+| **Timeout** | How long am I willing to wait? | The caller's threads and latency |
+| **Retry** | Is the failure probably transient? | The success rate of a flaky call |
+| **Rate limiting** | How many requests do I accept per unit of time? | The server from its clients |
+| **Backpressure** | How do I tell producers to slow down? | A consumer that cannot keep up |
+| **Circuit breaker** | Should I stop calling a dependency that keeps failing? | The caller and the failing dependency |
+| **Bulkhead** | How do I keep one dependency from consuming all resources? | The rest of the system |
+
+## Token bucket
+
+A bucket holds up to a maximum number of tokens (say 5) and each request consumes one. Tokens are refilled automatically at a configured rate, so short bursts are allowed and the average rate is capped. When the bucket is empty, the request is rejected, typically with `429 Too Many Requests`. It can run in an API gateway or on shared storage such as Redis, consuming and refilling tokens **atomically**.
+
+## Timeouts: the outcome is unknown
+
+Distinguish the time to establish the connection, the read time and the **total budget** of the request: if Checkout has 500 ms in total, it makes no sense to wait several seconds on each dependency.
+
+A timeout means *you stopped waiting*, **not** that the remote operation did not run. The charge may have succeeded.
+
+```java
+HttpRequest request = HttpRequest.newBuilder(uri)
+    .timeout(Duration.ofSeconds(2))
+    .header("Idempotency-Key", key)   // so a retry cannot charge twice
+    .POST(body).build();
+```
+
+## Retries
+
+Retry only **transient** failures, only **idempotent** operations (or with an idempotency key), a **bounded** number of times, with **exponential backoff and jitter**:
+
+```kotlin
+suspend fun <T> retry(times: Int = 3, base: Long = 100, block: suspend () -> T): T {
+    var attempt = 0
+    while (true) {
+        try { return block() } catch (e: IOException) {
+            if (++attempt >= times) throw e
+            delay(base * (1L shl (attempt - 1)) + Random.nextLong(base))   // backoff + jitter
+        }
+    }
+}
+```
+
+Immediate retries from many clients amplify an outage (a retry storm). **Exponential backoff** increases the wait between retries and **jitter** adds randomness so clients do not retry at the same time:
+
+```
+First retry:  100 ms + jitter
+Second retry: 200 ms + jitter
+Third retry:  400 ms + jitter
+```
+
+Limit the retries, respect the total budget and check that the operation is safe to repeat.
+
+## Rate limiting and backpressure
+
+- **Rate limiting** rejects what exceeds a policy, for example a **token bucket** that refills at a fixed rate and allows short bursts. Excess requests get `429 Too Many Requests`.
+- **Load shedding** is rejecting work deliberately when the system cannot process it with reasonable guarantees, for example answering `503 Service Unavailable` before the service collapses.
+- **Backpressure** pushes the limit upstream: a **bounded queue**, concurrency limits or a demand signal make producers wait, slow down or drop, instead of piling up unbounded memory. Reactive systems have an explicit model where the consumer requests how many elements it is ready to receive.
+
+## Circuit breaker
+
+```
+CLOSED ──(failure rate too high)──▶ OPEN ──(wait time)──▶ HALF-OPEN
+   ▲                                  │                       │
+   └──────────(probe succeeds)────────┴──(probe fails)────────┘
+```
+
+An example configuration (not universally recommended values; tune them to the traffic and to each dependency):
+
+```yaml
+circuitBreaker:
+  failureRateThreshold: 50%
+  slidingWindowSize: 100
+  minimumNumberOfCalls: 20
+  waitDurationInOpenState: 30s
+  permittedCallsInHalfOpenState: 5
+```
+
+While **open**, calls fail immediately without touching the dependency, giving it time to recover. **Half-open** lets a few probe calls through.
+
+## Bulkhead
+
+Separate resources per dependency, for example if Checkout calls PayPal, Adyen and a vouchers service, give each its own concurrency limit or pool. The goal is that the failure of one dependency does not consume all the resources and cause a cascading failure. Like the watertight compartments of a ship, each dependency gets its own thread pool, semaphore or connection pool:
+
+```kotlin
+private val paymentsLimit = Semaphore(20)     // a slow payment provider can use at most 20 slots
+private val recommendationsLimit = Semaphore(5)
+```
+
+If recommendations hang, they consume their 5 slots and nothing else.
+
+## Details that matter in production
+
+- **Retries multiply across layers.** If the gateway, the service and its client each retry 3 times, a failing database receives up to 3 × 3 × 3 = 27 attempts per user request. Retry at one layer, and use a **retry budget** (for example, retries may be at most 10% of the requests).
+- **Retry only what is retryable**: timeouts, connection errors, `503` and `429`, honouring `Retry-After`. Do not retry `400`, `401`, `404` or `409`: they will fail again.
+- **Propagate deadlines**: pass the remaining budget downstream (gRPC does it with deadlines). A dependency should not keep working on a request whose caller already gave up.
+- **Choose timeouts from data**: start from the dependency's observed p99 plus margin, inside the caller's total budget.
+- **Full jitter** (a random wait between 0 and the backoff) spreads retries better than adding a small random amount.
+
+| Rate limiting algorithm | Behaviour |
+| --- | --- |
+| Fixed window | Simple counter per minute; allows double bursts around window edges |
+| Sliding window | Smooths the edges, at some memory or precision cost |
+| Token bucket | Allows bursts up to the capacity, caps the average rate |
+| Leaky bucket | Queues requests and releases them at a constant rate |
+
+A circuit breaker usually lives **per instance and per dependency**: each pod decides from what it sees, so pods may open at different moments.

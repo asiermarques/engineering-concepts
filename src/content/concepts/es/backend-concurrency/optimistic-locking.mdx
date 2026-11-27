@@ -1,0 +1,109 @@
+---
+id: optimistic-locking
+title: Optimistic locking
+topic: backend-concurrency
+order: 4
+learningObjective: Implementar un control de concurrencia mediante versionado y actualizaciones condicionales.
+summary: Asume que los conflictos son raros, los detecta al escribir con una versión y los reintenta o los notifica.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+El **optimistic locking** no toma ningún lock al leer. Cada fila lleva una **versión**, y la escritura solo tiene éxito si la versión sigue siendo la que leíste. Si alguien escribió antes, tu actualización no coincide con ninguna fila y sabes que hubo un conflicto.
+
+```sql
+-- la fila leída: id = 7, balance = 100, version = 3
+UPDATE accounts
+SET    balance = 70,
+       version = version + 1
+WHERE  id = 7
+  AND  version = 3;
+-- filas afectadas = 1 → has ganado; 0 → otra petición cambió la fila
+```
+
+<StaticWalkthrough
+  caption="Dos clientes editan la misma cuenta con versionado: la segunda escritura encuentra la versión 4 en vez de la 3, afecta a 0 filas y debe recargar y reintentar."
+  columns={['Cliente A', 'Cliente B', 'Fila en la base de datos']}
+  rows={[
+    ['lee: balance 100, versión 3', '', 'balance 100, versión 3'],
+    ['', 'lee: balance 100, versión 3', 'balance 100, versión 3'],
+    ['UPDATE ... WHERE version = 3 → 1 fila', '', 'balance 70, versión 4'],
+    ['', 'UPDATE ... WHERE version = 3 → 0 filas (conflicto)', 'balance 70, versión 4'],
+    ['', 'recarga: balance 70, versión 4', 'balance 70, versión 4'],
+    ['', 'UPDATE ... WHERE version = 4 → 1 fila', 'balance 40, versión 5'],
+  ]}
+/>
+
+## En código
+
+```java
+@Entity
+class Account {
+    @Id Long id;
+    long balance;
+    @Version long version;   // JPA añade "AND version = ?" y lanza una excepción si hay conflicto
+}
+
+try {
+    accountService.withdraw(7L, 30);
+} catch (OptimisticLockException e) {
+    // recargar y reintentar unas pocas veces, o responder 409 Conflict
+}
+```
+
+```kotlin
+tailrec fun withdraw(id: Long, amount: Long, attempts: Int = 3) {
+    val account = repository.find(id)
+    val updated = repository.updateIfVersion(id, account.balance - amount, account.version)
+    if (!updated) {
+        check(attempts > 1) { "Demasiados conflictos" }
+        withdraw(id, amount, attempts - 1)
+    }
+}
+```
+
+## Sobre HTTP
+
+La cabecera `ETag` hace el papel de la versión. El cliente la devuelve con `If-Match`:
+
+```http
+PUT /accounts/7 HTTP/1.1
+If-Match: "3"
+Content-Type: application/json
+
+{"balance": 70}
+```
+
+```http
+HTTP/1.1 412 Precondition Failed
+```
+
+## Optimistic frente a pessimistic
+
+| | Optimistic | Pessimistic |
+| --- | --- | --- |
+| Estrategia | Detectar conflictos | Prevenir modificaciones incompatibles |
+| Momento | Al actualizar | Antes de operar |
+| Ante un conflicto | Rechaza la actualización | Normalmente espera |
+| Baja contención | Muy adecuado | Puede ser innecesario |
+| Alta contención | Muchos reintentos | Puede reducir el trabajo desperdiciado |
+| Riesgo | Exceso de reintentos | Bloqueos y deadlocks |
+
+## ¿Qué hace la segunda petición?
+
+- Leer de nuevo el recurso, recalcular la operación y reintentar.
+- Devolver un conflicto HTTP `409`.
+- Pedir al usuario que revise el estado actualizado.
+
+No siempre es correcto reintentar automáticamente: si alguien está editando un documento, por ejemplo, podrías sobrescribir los cambios de otra persona.
+
+**Ventaja:** no necesitas mantener el recurso bloqueado mientras el cliente trabaja. **Desventaja:** cuando hay muchos conflictos, desperdicias trabajo y generas numerosos reintentos. Ninguna estrategia es universalmente mejor: depende de la contención, la duración de las transacciones y el coste de repetir una operación.
+
+Reintentar solo es seguro si el trabajo previo a la actualización no tiene efectos externos, o si esos efectos son idempotentes.
+
+## Trampas en la práctica
+
+- **La versión tiene que viajar con el cliente.** Si la API carga la entidad, aplica el body y la guarda en la misma petición, la comprobación de versión solo protege esos pocos milisegundos, no los minutos que el usuario pasó editando. Devuelve la versión (o el `ETag`) en el `GET` y exígela en la actualización.
+- **Obliga a enviar la precondición**: responde `428 Precondition Required` cuando llega una actualización sin `If-Match`, para que los clientes no puedan saltarse la comprobación. `If-Match` usa comparación fuerte, así que los ETags débiles (`W/"3"`) no sirven.
+- **Reintenta en una transacción nueva.** Tras una `OptimisticLockException` la transacción queda marcada para rollback y el contexto de persistencia tiene datos obsoletos. El reintento debe envolver todo el método transaccional, no hacer un bucle dentro de él. En Spring la excepción llega como `ObjectOptimisticLockingFailureException`.
+- **JPA comprueba al hacer flush o commit**, así que la excepción puede aparecer más tarde que la línea que cambió la entidad.
+- **Las actualizaciones masivas** (`UPDATE ... WHERE ...` en JPQL) se saltan `@Version` salvo que la incrementes tú.

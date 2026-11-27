@@ -1,0 +1,82 @@
+concept: resilience
+challenges:
+  - id: rs-1
+    type: multiple-choice
+    prompt: "`POST /charges` to the payment provider times out after 2 seconds. What can you conclude?"
+    options:
+      - id: a
+        text: Nothing certain. The charge may have succeeded, so retries need an idempotency key or a status check.
+        correct: true
+        explanation: A timeout only says you stopped waiting. The outcome on the remote side is unknown.
+      - id: b
+        text: The charge did not happen, so retrying is always safe.
+        correct: false
+        explanation: Retrying without an idempotency key could charge twice.
+      - id: c
+        text: The provider is down.
+        correct: false
+        explanation: It could be slow, or the response could have been lost.
+  - id: rs-2
+    type: multiple-choice
+    prompt: 1000 clients retry immediately and without limits when a service fails. What is the likely result?
+    options:
+      - id: a
+        text: A retry storm that multiplies the load on the already struggling service and slows its recovery.
+        correct: true
+        explanation: Backoff with jitter and a bounded number of attempts spread the retries over time.
+      - id: b
+        text: The service recovers faster because it receives more requests.
+        correct: false
+        explanation: More load on a struggling service makes it worse.
+      - id: c
+        text: Nothing, retries are free.
+        correct: false
+        explanation: Each retry consumes server resources.
+  - id: rs-3
+    type: multiple-choice
+    prompt: A dependency fails 90% of its calls. What does an open circuit breaker do?
+    options:
+      - id: a
+        text: Fails calls immediately without calling the dependency, then lets a few probes through (half-open) to see if it recovered.
+        correct: true
+        explanation: Fast failure saves the caller's resources and gives the dependency room to recover.
+      - id: b
+        text: Retries each call 10 times.
+        correct: false
+        explanation: That is retry behaviour, and it would add load.
+      - id: c
+        text: Limits clients to a number of requests per second.
+        correct: false
+        explanation: That describes rate limiting.
+  - id: rs-4
+    type: multiple-choice
+    prompt: Which statements distinguish rate limiting from backpressure correctly?
+    options:
+      - id: a
+        text: Rate limiting rejects requests above a policy, typically with 429.
+        correct: true
+        explanation: The server enforces a limit on how much it accepts.
+      - id: b
+        text: Backpressure signals producers to slow down, for example through a bounded queue, instead of buffering without limit.
+        correct: true
+        explanation: The limit is communicated upstream so work does not pile up in memory.
+      - id: c
+        text: They are the same pattern with two names.
+        correct: false
+        explanation: They address different things, rejecting excess versus slowing the source.
+  - id: rs-5
+    type: multiple-choice
+    prompt: What does a bulkhead achieve?
+    options:
+      - id: a
+        text: A slow dependency can only exhaust its own pool of resources, not those used by other dependencies.
+        correct: true
+        explanation: Isolating resources contains the failure to one compartment.
+      - id: b
+        text: Failed calls are retried automatically.
+        correct: false
+        explanation: That is a retry.
+      - id: c
+        text: Calls are cancelled after a maximum duration.
+        correct: false
+        explanation: That is a timeout.

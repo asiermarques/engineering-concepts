@@ -1,0 +1,99 @@
+---
+id: idempotency
+title: Idempotencia
+topic: backend-concurrency
+order: 6
+learningObjective: Implementar una clave persistente, unicidad y recuperación ante fallos.
+summary: Hacer que una petición reintentada produzca el mismo efecto que la primera registrando su clave en la base de datos.
+---
+
+Una operación es **idempotente** cuando ejecutarla varias veces tiene el mismo efecto que ejecutarla una vez. En pagos es lo que hace seguros los reintentos: tras un timeout el cliente no puede saber si el primer intento funcionó.
+
+HTTP define `GET`, `PUT` y `DELETE` como idempotentes, pero `POST /payments` no lo es, y `UPDATE accounts SET balance = balance - 10` tampoco. El cliente envía una **clave de idempotencia** para que un `POST` se pueda reintentar con seguridad:
+
+```http
+POST /payments HTTP/1.1
+Idempotency-Key: 8b1f6c8e-5d0a-4a3e-9e7c-3f2b1c0d9a11
+Content-Type: application/json
+
+{"orderId": 42, "amount": 100}
+```
+
+## Clave persistente con restricción de unicidad
+
+```sql
+CREATE TABLE idempotency_keys (
+    merchant_id   VARCHAR(100),
+    operation     VARCHAR(50),
+    key           VARCHAR(100),
+    request_hash  VARCHAR(100) NOT NULL,
+    status        VARCHAR(20) NOT NULL,   -- PROCESSING | COMPLETED
+    response      JSONB,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at    TIMESTAMPTZ,
+    PRIMARY KEY (merchant_id, operation, key)   -- única dentro de su ámbito
+);
+
+INSERT INTO idempotency_keys (merchant_id, operation, key, request_hash, status)
+VALUES ('merchant-1', 'payment', '8b1f...', 'sha256-del-body', 'PROCESSING')
+ON CONFLICT DO NOTHING;      -- 1 fila insertada → la clave es tuya; 0 → ya existía
+```
+
+La **restricción de unicidad** es el mecanismo. La clave debe ser única dentro de su ámbito, por ejemplo por comerciante y tipo de operación. Un `SELECT` para ver si la clave existe seguido de un `INSERT` sería de nuevo una race condition: dos peticiones simultáneas podrían ver que la clave aún no existe. El hash sirve para comprobar que el cliente no reutiliza por error la misma clave para una operación distinta.
+
+```java
+if (keys.tryInsert(key, requestHash)) {
+    PaymentResponse response = payments.charge(request);   // primera vez
+    keys.complete(key, response);
+    return response;
+}
+IdempotencyRecord existing = keys.find(key);
+if (!existing.requestHash().equals(requestHash)) throw new KeyReuseException();   // 422
+if (existing.isCompleted()) return existing.response();                           // replay
+throw new RequestInProgressException();                                           // 409, reintentar más tarde
+```
+
+## Recuperación ante fallos
+
+| Situación | Qué hacer |
+| --- | --- |
+| Misma clave, mismo body, completada | Devolver la respuesta guardada sin ejecutar de nuevo |
+| Misma clave, mismo body, aún `PROCESSING` | Responder 409 y dejar que el cliente reintente más tarde |
+| Misma clave, body distinto | Rechazar: la clave se está reutilizando para otra petición |
+| El proceso cayó con la clave `PROCESSING` | **No** borrarla y volver a cobrar; averiguar antes qué ocurrió (ver abajo) |
+| Llamada a un proveedor externo | Pasarle tu clave (o una derivada) para que el proveedor también deduplique |
+
+Guarda la clave y el cambio de negocio en la **misma transacción** cuando ambos viven en tu base de datos. Para efectos externos, la idempotencia en el lado del proveedor cierra el hueco que una transacción no puede cerrar.
+
+## ¿Y si el pago se realiza pero el servicio cae antes de guardar COMPLETED?
+
+Esta pregunta separa una implementación básica de una robusta. La clave se registra como `PROCESSING`, el proveedor cobra al cliente, el servicio cae y el resultado nunca se guarda. Al recuperarse, no sabes necesariamente si el pago se realizó.
+
+- **Si toda la operación es local**, guarda el efecto de negocio y el resultado de idempotencia en la **misma transacción de base de datos**.
+- **Si hay un proveedor externo**, una transacción local no puede deshacer ni confirmar un pago realizado por otro sistema. Combina mecanismos:
+  - Propagar al PSP una clave de idempotencia estable.
+  - Persistir el identificador de la operación **antes** de llamar al proveedor.
+  - Consultar el estado de la transacción en el PSP.
+  - Implementar conciliación y recuperación de operaciones incompletas.
+  - Controlar cómo se recuperan los registros que se quedan en `PROCESSING`.
+
+Nunca borres una clave que lleva mucho tiempo en `PROCESSING` y vuelvas a cobrar sin comprobar qué ha ocurrido.
+
+## Detalles de diseño
+
+- **Una clave por operación lógica, no por intento.** El cliente genera la clave (por ejemplo un UUID v4) una vez, antes del primer intento, y la reutiliza en cada reintento. Una clave nueva por reintento anula todo el mecanismo.
+- **Una clave natural suele ser más sencilla.** Si solo puede haber un pago por pedido, una restricción de unicidad sobre `payments(order_id)` ya hace idempotente la operación sin una tabla aparte.
+- **Guarda resultados deterministas, no transitorios.** Repetir un error de validación (`400`, `422`) está bien. Guardar un fallo transitorio (un timeout del proveedor) como respuesta final impediría que un reintento posterior llegara a funcionar; deja esos casos para que la operación se pueda reanudar o conciliar.
+- **Las claves viven durante una ventana** (a menudo unas 24 horas). Un reintento tras expirar la clave es una petición nueva, así que la ventana debe cubrir cuánto reintentan los clientes en la práctica.
+- **Los consumidores también la necesitan**: un broker de mensajes entrega al menos una vez, así que un consumidor registra los ids de mensaje procesados con una restricción de unicidad en la misma transacción que su efecto (el *inbox*, ver Saga).
+- Hay un borrador del IETF que estandariza la cabecera `Idempotency-Key`; síguelo al diseñar una API pública.
+
+## Redis
+
+```
+SET payment:abc-123 processing NX EX 3600
+```
+
+`NX` crea la clave solo si no existe, y `EX` fija una expiración. Es atómico, pero para pagos críticos prefiere un **registro persistente** con estados y garantías de recuperación suficientemente fuertes: una clave temporal en Redis no es, por sí sola, una garantía contra cobros duplicados.
+
+**Concepto de entrevista:** idempotencia no significa necesariamente ejecutar el código exactamente una vez. Significa garantizar que repetir la operación no genera efectos adicionales indebidos.

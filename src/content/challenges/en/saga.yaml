@@ -1,0 +1,83 @@
+concept: saga
+challenges:
+  - id: sg-1
+    type: multiple-choice
+    prompt: Why is a saga used for a checkout that spans inventory, payments and shipping services, each with its own database?
+    options:
+      - id: a
+        text: There is no single ACID transaction across the services, so the flow is split into local transactions with compensations.
+        correct: true
+        explanation: Each service can only commit or roll back its own data. A saga manages consistency across them.
+      - id: b
+        text: Because a saga gives the same isolation as a single ACID transaction.
+        correct: false
+        explanation: A saga exposes intermediate states to other readers. It is eventual consistency, not isolation.
+      - id: c
+        text: Because sagas avoid ever needing to handle failures.
+        correct: false
+        explanation: Sagas exist precisely to handle failures in the middle of a flow.
+  - id: sg-2
+    type: multiple-choice
+    prompt: The payment was charged and the shipment then failed. What does the saga do?
+    options:
+      - id: a
+        text: It runs compensations for the completed steps, such as refunding the payment and releasing the stock.
+        correct: true
+        explanation: A compensation is a business action that semantically undoes a committed step.
+      - id: b
+        text: It rolls back the payment service's database transaction.
+        correct: false
+        explanation: That transaction was already committed. It can no longer be rolled back.
+      - id: c
+        text: It ignores the failure and leaves the order paid without shipment.
+        correct: false
+        explanation: That would leave the system inconsistent.
+  - id: sg-3
+    type: multiple-choice
+    prompt: Why must saga steps and compensations be idempotent?
+    options:
+      - id: a
+        text: They are retried after crashes and timeouts, so the same step can be delivered more than once.
+        correct: true
+        explanation: Without idempotency, a retried refund or reservation would be applied twice.
+      - id: b
+        text: Because compensations are never executed.
+        correct: false
+        explanation: They are executed whenever a later step fails.
+      - id: c
+        text: To avoid the need for persistence.
+        correct: false
+        explanation: The saga state must still be persisted to recover from a crash.
+  - id: sg-4
+    type: multiple-choice
+    prompt: Which statement correctly contrasts orchestration and choreography?
+    options:
+      - id: a
+        text: In orchestration a coordinator directs the steps, in choreography each service reacts to events from the others.
+        correct: true
+        explanation: Orchestration centralizes the flow, choreography distributes it.
+      - id: b
+        text: In choreography a central coordinator stores the whole flow.
+        correct: false
+        explanation: That describes orchestration.
+      - id: c
+        text: They are the same thing, only named differently.
+        correct: false
+        explanation: They distribute control differently, with different coupling and visibility.
+
+  - id: sg-5
+    type: multiple-choice
+    prompt: In a checkout saga, why authorize the card early and capture it only at the end?
+    options:
+      - id: a
+        text: An authorization only holds funds and can be voided cheaply, so if stock or shipping fails the compensation is a void instead of a refund.
+        correct: true
+        explanation: Moving the hard-to-undo step (the capture) late makes the earlier steps cheap to compensate.
+      - id: b
+        text: Because capturing first is not allowed by card networks.
+        correct: false
+        explanation: Immediate capture is possible. The point is how easy the step is to undo.
+      - id: c
+        text: Because authorizations never expire, so the saga can wait indefinitely.
+        correct: false
+        explanation: Authorizations expire after some days, which actually bounds how long the saga can wait.

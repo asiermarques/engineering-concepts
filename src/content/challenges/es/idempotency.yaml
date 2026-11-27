@@ -1,0 +1,87 @@
+concept: idempotency
+challenges:
+  - id: id-1
+    type: multiple-choice
+    prompt: Un cliente envía `POST /payments` con un `Idempotency-Key`, sufre un timeout y reenvía la misma petición con la misma clave. ¿Qué debe hacer el servidor?
+    options:
+      - id: a
+        text: Devolver el resultado guardado de la primera ejecución (o indicar que sigue en curso), sin volver a cobrar.
+        correct: true
+        explanation: Ese es el propósito de la clave. El efecto ocurre una vez, por muchas veces que llegue la petición.
+      - id: b
+        text: Cobrar otra vez, porque cada POST es un pago nuevo.
+        correct: false
+        explanation: Con una clave, el servidor debe tratar las peticiones repetidas como el mismo pago.
+      - id: c
+        text: Rechazar siempre la segunda petición con 500.
+        correct: false
+        explanation: Un reintento es comportamiento normal del cliente. Rechazarlo con un error de servidor no le da una respuesta útil.
+  - id: id-2
+    type: multiple-choice
+    prompt: ¿Por qué la clave debe imponerse con una restricción de unicidad y no con «hacer SELECT de la clave y, si no existe, INSERT»?
+    options:
+      - id: a
+        text: Dos peticiones concurrentes pueden ver la clave como ausente. Solo la restricción hace que exactamente un insert tenga éxito.
+        correct: true
+        explanation: Comprobar y luego insertar es de nuevo una race condition. La base de datos impone la unicidad de forma atómica.
+      - id: b
+        text: Porque no se permite SELECT en tablas de claves.
+        correct: false
+        explanation: Nada lo prohíbe. Simplemente no basta.
+      - id: c
+        text: Porque una restricción de unicidad hace más rápida la escritura de la tabla.
+        correct: false
+        explanation: La razón no es el rendimiento sino la corrección bajo concurrencia.
+  - id: id-3
+    type: multiple-choice
+    prompt: La misma `Idempotency-Key` llega con un body distinto (otro importe). ¿Cuál es el comportamiento correcto?
+    options:
+      - id: a
+        text: Rechazarla, por ejemplo con 422, porque la clave se reutiliza para una petición distinta.
+        correct: true
+        explanation: Comparar un hash de la petición detecta el mal uso y evita devolver la respuesta equivocada.
+      - id: b
+        text: Devolver la respuesta de la primera petición como si nada hubiera cambiado.
+        correct: false
+        explanation: El cliente creería que se procesó su nueva petición cuando no fue así.
+      - id: c
+        text: Ejecutar el nuevo body y sobrescribir la respuesta guardada.
+        correct: false
+        explanation: Rompe la garantía de que una clave significa una operación.
+  - id: id-4
+    type: multiple-choice
+    prompt: ¿Qué operaciones son idempotentes por su naturaleza?
+    options:
+      - id: a
+        text: "`PUT /orders/42` reemplazando el pedido con el mismo body completo."
+        correct: true
+        explanation: Aplicar dos veces el mismo reemplazo deja el mismo estado.
+      - id: b
+        text: "`DELETE /orders/42`, respecto al estado resultante."
+        correct: true
+        explanation: El estado tras uno o varios borrados es el mismo. El código de estado puede cambiar (204 y luego 404), pero el efecto no.
+      - id: c
+        text: "`UPDATE accounts SET balance = balance - 10 WHERE id = 1`"
+        correct: false
+        explanation: Cada ejecución resta de nuevo, así que repetirla cambia el resultado.
+      - id: d
+        text: "`POST /payments` sin ninguna clave."
+        correct: false
+        explanation: Cada llamada puede crear otro pago. Por eso hace falta la clave.
+
+  - id: id-5
+    type: multiple-choice
+    prompt: Una clave se queda en `PROCESSING` tras la caída del servicio, y el proveedor puede haber cobrado o no al cliente. ¿Cuál es la recuperación correcta?
+    options:
+      - id: a
+        text: Consultar el estado del pago en el proveedor, usando el identificador de operación persistido y una clave de idempotencia estable, y conciliar antes de decidir.
+        correct: true
+        explanation: Una transacción local no puede saber si otro sistema cobró la tarjeta. Solo lo sabe el proveedor (o la conciliación).
+      - id: b
+        text: Borrar la clave `PROCESSING` antigua y procesar el pago de nuevo.
+        correct: false
+        explanation: Si el primer intento sí cobró, esto cobra dos veces al cliente.
+      - id: c
+        text: Marcarla `COMPLETED` para que el cliente deje de reintentar.
+        correct: false
+        explanation: Declarar éxito sin conocer el resultado puede ocultar un pago que nunca se hizo.

@@ -1,0 +1,87 @@
+concept: transaction-isolation
+challenges:
+  - id: ti-1
+    type: multiple-choice
+    prompt: In a database with MVCC, what happens when a long report query reads a table while payments are being written to it?
+    options:
+      - id: a
+        text: The report reads from a consistent snapshot, and neither the readers nor the writers block each other.
+        correct: true
+        explanation: Each transaction sees a version of the data. Writers create new row versions instead of blocking readers.
+      - id: b
+        text: The report blocks all writes until it finishes.
+        correct: false
+        explanation: That is how read locks work in lock-based engines, not in MVCC.
+      - id: c
+        text: The report sees uncommitted payments.
+        correct: false
+        explanation: With READ COMMITTED or stronger, uncommitted changes are never visible.
+  - id: ti-2
+    type: multiple-choice
+    prompt: Two on-call doctors each check that at least 2 doctors are on call and then set themselves off call, in separate transactions under snapshot isolation. What is this anomaly?
+    options:
+      - id: a
+        text: Write skew. Each transaction writes a different row, but together they break the invariant.
+        correct: true
+        explanation: Snapshot isolation only detects write-write conflicts on the same row, so both commit.
+      - id: b
+        text: Dirty read.
+        correct: false
+        explanation: Nothing uncommitted was read.
+      - id: c
+        text: A deadlock.
+        correct: false
+        explanation: Nobody waits for locks. Both commit.
+  - id: ti-3
+    type: multiple-choice
+    prompt: Which statements about isolation levels are true?
+    options:
+      - id: a
+        text: The same level name can behave differently in different engines.
+        correct: true
+        explanation: The standard sets minimum guarantees. PostgreSQL's REPEATABLE READ, for example, is snapshot isolation and also prevents phantoms.
+      - id: b
+        text: SERIALIZABLE may abort a transaction with a serialization error, which the application has to retry.
+        correct: true
+        explanation: Many engines detect dangerous patterns and abort one transaction rather than block.
+      - id: c
+        text: READ COMMITTED prevents lost updates in a read-then-write sequence.
+        correct: false
+        explanation: Two transactions can read the same committed value and both write.
+      - id: d
+        text: A higher isolation level never costs anything.
+        correct: false
+        explanation: It costs more blocking, aborts or retries, depending on the engine.
+  - id: ti-4
+    type: multiple-choice
+    prompt: The database reports a deadlock and aborts one of your transactions. What should you do?
+    options:
+      - id: a
+        text: Retry the aborted transaction, and prevent it in future by locking rows in a consistent order and keeping transactions short.
+        correct: true
+        explanation: The abort is a normal signal. The victim has to be retried, and ordering removes the cycle.
+      - id: b
+        text: Disable deadlock detection to avoid the errors.
+        correct: false
+        explanation: Without detection, the transactions would wait until a lock timeout.
+      - id: c
+        text: Wrap everything in `synchronized`.
+        correct: false
+        explanation: A local lock does not coordinate other pods, and does not fix the lock ordering in the database.
+
+  - id: ti-5
+    type: multiple-choice
+    prompt: The application reads a counter, adds 1 in Java and writes `SET views = :value`, in two concurrent transactions under REPEATABLE READ. What happens in PostgreSQL and in MySQL InnoDB?
+    options:
+      - id: a
+        text: PostgreSQL aborts the second writer with a serialization error; MySQL lets both commit and one increment is lost.
+        correct: true
+        explanation: PostgreSQL's snapshot isolation detects the concurrent update of the same row. InnoDB's UPDATE writes on the latest row without checking that the snapshot read is stale.
+      - id: b
+        text: Both engines lose one increment.
+        correct: false
+        explanation: PostgreSQL detects this case at REPEATABLE READ and raises an error.
+      - id: c
+        text: Both engines prevent it, because REPEATABLE READ means no lost updates by definition.
+        correct: false
+        explanation: The SQL standard does not define lost updates for that level, and engines differ, as MySQL shows.

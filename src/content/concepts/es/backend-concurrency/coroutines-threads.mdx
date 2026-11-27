@@ -1,0 +1,98 @@
+---
+id: coroutines-threads
+title: Coroutines y threads
+topic: backend-concurrency
+order: 9
+learningObjective: Distinguir concurrencia, paralelismo y operaciones bloqueantes.
+summary: La concurrencia estructura trabajo que se solapa, el paralelismo lo ejecuta en el mismo instante, y bloquear un hilo lo desperdicia.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+- **Concurrencia**: varias tareas están en curso y se solapan en el tiempo. Un solo núcleo puede hacerlo alternando entre ellas.
+- **Paralelismo**: varias tareas se ejecutan literalmente en el mismo instante en núcleos distintos.
+- **Bloqueo**: un hilo espera (por I/O, un lock, un sleep) y no hace nada más mientras tanto.
+
+## Threads
+
+Un thread de plataforma es un hilo del sistema operativo con su propia pila, así que hay cantidades limitadas. Un servidor con un hilo por petición es sencillo, pero cada petición que espera una base de datos o una llamada HTTP **retiene un hilo**, y un pool de 200 hilos atiende como máximo 200 peticiones que están esperando.
+
+```java
+// Java 21+: los virtual threads son baratos, así que el código bloqueante escala mucho mejor
+try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    executor.submit(() -> callPaymentService());
+}
+```
+
+## Thread pools
+
+En lugar de crear un hilo por operación, mantén un conjunto de hilos reutilizables:
+
+```java
+ExecutorService executor = Executors.newFixedThreadPool(20);
+
+executor.submit(() -> callStockService());
+```
+
+Hasta 20 hilos trabajadores ejecutan tareas; si todos están ocupados, las tareas adicionales esperan en una cola. En producción, limita también esa cola: esta factoría usa una prácticamente sin límite.
+
+## Event loop
+
+Un hilo puede gestionar muchas operaciones de I/O sin bloquearse mientras termina cada una. Cuando una operación de red finaliza, su continuación se programa para ejecutarse. Es el modelo de Node.js y de frameworks reactivos como Netty. El riesgo principal es ejecutar una operación **bloqueante** o muy costosa en CPU dentro del event loop: perjudicas a todas las peticiones que dependen de ese mismo hilo.
+
+## Coroutines
+
+Una corrutina de Kotlin puede **suspenderse** en una llamada como `delay` o una llamada HTTP asíncrona, liberando el hilo para ejecutar otra corrutina, y reanudarse más tarde. Miles de corrutinas pueden compartir unos pocos hilos.
+
+```kotlin
+suspend fun load(): Order {
+    delay(200)                 // se suspende: el hilo queda libre mientras tanto
+    // Thread.sleep(200)       // bloquea: el hilo se desperdicia
+    return fetchOrder()
+}
+
+withContext(Dispatchers.IO) {  // el JDBC o el I/O de ficheros bloqueante va al dispatcher IO
+    jdbc.query("SELECT ...")
+}
+```
+
+Una corrutina no convierte mágicamente una operación bloqueante en no bloqueante. Si llamas a un cliente HTTP bloqueante, debes usar recursos de ejecución adecuados.
+
+Los **virtual threads** (Java 21+) permiten mantener un estilo de programación bloqueante con hilos mucho más ligeros: durante muchas operaciones bloqueantes de I/O, el hilo virtual libera el hilo de plataforma que lo ejecutaba. Facilitan gestionar grandes cantidades de peticiones concurrentes, pero no eliminan la necesidad de limitar el acceso a bases de datos, proveedores externos o recursos físicos.
+
+| | Thread de plataforma | Virtual thread / corrutina |
+| --- | --- | --- |
+| Coste | Pesado, escaso | Ligero, abundante |
+| Esperar I/O | Bloquea un hilo | Se desmonta o suspende, el hilo se reutiliza |
+| Necesita | Un pool grande para mucha concurrencia | Pocos hilos portadores |
+| Riesgo | Agotamiento del pool | Llamadas bloqueantes en un dispatcher pequeño |
+
+## Concurrente frente a secuencial
+
+<StaticWalkthrough
+  caption="Tres llamadas independientes de 200 ms cada una: en secuencia tardan unos 600 ms, de forma concurrente unos 200 ms, incluso con un solo hilo si el I/O es no bloqueante, porque el tiempo se gasta esperando."
+  columns={['Enfoque', 'Línea de tiempo', 'Total']}
+  rows={[
+    ['Secuencial', 'llamada 1 (0–200), llamada 2 (200–400), llamada 3 (400–600)', '~600 ms'],
+    ['Concurrente (I/O-bound)', 'las llamadas 1, 2 y 3 empiezan en 0 y esperan a la vez', '~200 ms'],
+  ]}
+/>
+
+## Elegir según la carga
+
+- El trabajo **I/O-bound** (esperar redes y bases de datos) se beneficia de la **concurrencia**. No bloquees hilos mientras esperas.
+- El trabajo **CPU-bound** (hashing, parseo) se beneficia del **paralelismo**, limitado por el número de núcleos. Más hilos que núcleos solo añade cambios de contexto.
+| Modelo | Cuándo resulta interesante |
+| --- | --- |
+| Thread pool tradicional | Modelo sencillo y concurrencia controlada |
+| Event loop | Muchas operaciones de I/O no bloqueante |
+| Coroutines | Concurrencia estructurada y código asíncrono legible |
+| Virtual threads | Alta concurrencia con programación de estilo bloqueante |
+
+- Nunca ejecutes una llamada bloqueante en un dispatcher pensado para CPU (`Dispatchers.Default`): con solo tantos hilos como núcleos, unas pocas llamadas bloqueadas detienen todo.
+
+## Trampas
+
+- **`runBlocking` en los handlers de peticiones** bloquea un hilo del servidor hasta que terminan las corrutinas, y anula la ventaja. Úsalo solo en `main` o en tests.
+- **La cancelación es cooperativa.** Una corrutina se cancela en los puntos de suspensión; una llamada JDBC bloqueante o un bucle intensivo la ignoran. Usa APIs cancelables, o comprueba `isActive` / llama a `ensureActive()` en cálculos largos.
+- **`Dispatchers.IO` está acotado** (64 hilos por defecto, o el número de núcleos si es mayor). Usa `Dispatchers.IO.limitedParallelism(n)` para dar a una dependencia lenta su propia porción acotada.
+- **No hagas pools de virtual threads.** Están pensados para crearse por tarea; limita el acceso a recursos escasos con semáforos o pools, no limitando hilos. Los `ThreadLocal` grandes por virtual thread también suman rápido.

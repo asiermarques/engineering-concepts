@@ -1,0 +1,111 @@
+---
+id: transaction-isolation
+title: Transaction isolation
+topic: backend-concurrency
+order: 8
+learningObjective: Understand concurrency anomalies, MVCC and deadlocks.
+summary: Isolation levels trade anomalies for concurrency, MVCC gives snapshots without read locks, and deadlocks are detected and resolved by aborting one transaction.
+---
+import StaticWalkthrough from '../../../../features/simulators/StaticWalkthrough.astro';
+
+**Isolation** decides what a transaction can see of other concurrent transactions. Stronger isolation prevents more anomalies and costs more in blocking or retries.
+
+## ACID
+
+| Property | Meaning |
+| --- | --- |
+| Atomicity | All operations are confirmed or none. |
+| Consistency | The defined integrity rules are preserved. |
+| Isolation | Controls how concurrent transactions interact. |
+| Durability | Committed changes survive the failures covered by the persistence guarantee. |
+
+A transfer between accounts shows atomicity: debit and credit commit together. A real implementation must also check the available balance and validate the updates. Isolation is what interests us most here.
+
+## Anomalies
+
+| Anomaly | What happens |
+| --- | --- |
+| Dirty read | Reading data another transaction has not committed |
+| Non-repeatable read | Reading the same row twice and getting different values |
+| Phantom read | Running the same query twice and getting different sets of rows |
+| Lost update | Two read-modify-write cycles overwrite each other |
+| Write skew | Two transactions read overlapping data, write different rows, and together break an invariant |
+
+## Isolation levels
+
+The SQL standard defines four levels. The table shows what the **standard** permits; real engines often prevent more or behave differently, so check yours.
+
+| Level | Dirty read | Non-repeatable read | Phantom read |
+| --- | --- | --- | --- |
+| READ UNCOMMITTED | Possible | Possible | Possible |
+| READ COMMITTED | Prevented | Possible | Possible |
+| REPEATABLE READ | Prevented | Prevented | Possible (standard) |
+| SERIALIZABLE | Prevented | Prevented | Prevented |
+
+```sql
+BEGIN ISOLATION LEVEL SERIALIZABLE;
+-- ...
+COMMIT;   -- may fail with a serialization error: the application must retry
+```
+
+**SERIALIZABLE** guarantees that the effect of the committed transactions is equivalent to running them in some sequential order, even if they run concurrently inside. The price is more blocking or aborted transactions that need to be retried.
+
+Engine notes: PostgreSQL defaults to READ COMMITTED, treats READ UNCOMMITTED as READ COMMITTED, and its REPEATABLE READ is snapshot isolation (no phantoms, but write skew is still possible). MySQL InnoDB defaults to REPEATABLE READ.
+
+## Same name, different behaviour
+
+| Engine | Default | What surprises people |
+| --- | --- | --- |
+| PostgreSQL | READ COMMITTED | REPEATABLE READ is snapshot isolation and **detects** concurrent updates of the same row (serialization error), so lost updates fail instead of happening. SERIALIZABLE (SSI) also detects write skew. |
+| MySQL InnoDB | REPEATABLE READ | Plain `SELECT` reads a snapshot, but `UPDATE` and locking reads use the **latest committed** row. A read-modify-write done in the application (read, compute, `SET x = value`) can still lose updates. Locking reads take next-key (gap) locks. |
+| Oracle | READ COMMITTED | No REPEATABLE READ; its SERIALIZABLE is snapshot isolation, so write skew is possible. |
+| SQL Server | READ COMMITTED with locks | Readers block writers unless READ_COMMITTED_SNAPSHOT or SNAPSHOT isolation is enabled. |
+
+In an interview, say which engine you assume before talking about guarantees.
+
+## MVCC
+
+**Multi-Version Concurrency Control** keeps several versions of each row. A transaction reads from a **snapshot**, so **readers do not block writers and writers do not block readers**. Writers still conflict with other writers of the same row. The cost is storage for old versions and cleanup (vacuum). It does not mean locks and write-write conflicts have disappeared.
+
+## Write skew
+
+Two on-call doctors each check that at least two are on call, and each goes off call. Under snapshot isolation both succeed and nobody is left. Fixes: SERIALIZABLE (with retries), locking the rows that define the invariant (`FOR UPDATE`), or a constraint that encodes the invariant.
+
+## Deadlocks
+
+A **deadlock** is a cycle of transactions waiting for each other's locks:
+
+<StaticWalkthrough
+  caption="Two transactions lock the same two rows in opposite order and wait for each other forever; the database detects the cycle and aborts one of them."
+  columns={['Transaction A', 'Transaction B', 'Result']}
+  rows={[
+    ['locks row 1', '', 'A holds 1'],
+    ['', 'locks row 2', 'B holds 2'],
+    ['requests row 2 → waits for B', '', 'A waits'],
+    ['', 'requests row 1 → waits for A', 'cycle detected'],
+    ['', 'aborted as the victim (deadlock error)', 'A continues, B must retry'],
+  ]}
+/>
+
+```java
+for (int attempt = 1; ; attempt++) {
+    try {
+        transfer(fromId, toId, amount);
+        break;
+    } catch (DeadlockLoserDataAccessException e) {   // or serialization failure
+        if (attempt == 3) throw e;
+    }
+}
+```
+
+```sql
+SELECT *
+FROM   accounts
+WHERE  id IN (1, 2)
+ORDER  BY id
+FOR UPDATE;   -- always the lowest id first
+```
+
+Many engines detect deadlocks automatically, abort one of the transactions and release its resources: the application must be ready to retry it safely. PostgreSQL runs the check after waiting `deadlock_timeout` (1 s by default); InnoDB detects them immediately by default. Deadlocks also appear with a single statement that updates several rows in a different order than another one, with foreign key checks and with gap locks.
+
+Prevention: lock rows **in a consistent order** (for example by ascending id), keep transactions **short**, and always be ready to **retry**.

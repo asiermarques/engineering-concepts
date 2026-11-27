@@ -1,0 +1,104 @@
+---
+id: synchronized-mutex
+title: Synchronized and mutex
+topic: backend-concurrency
+order: 3
+learningObjective: Understand what a local lock protects and why it does not work across pods.
+summary: A local lock serializes threads inside one process, and nothing more.
+---
+
+A **local lock** (a monitor, a mutex) lets only one thread at a time run a critical section. It is the right tool to protect **in-memory state of one process**.
+
+```java
+public class PaymentService {
+    public synchronized void pay(long orderId) {   // one monitor per PaymentService instance
+        Order order = orders.findById(orderId);
+        if (order.getStatus() == Status.PENDING) {
+            gateway.charge(order.getTotal());
+            order.setStatus(Status.PAID);
+            orders.save(order);
+        }
+    }
+}
+```
+
+On a single instance this removes the race from the previous concepts. In Kotlin coroutines the equivalent does not block the thread:
+
+```kotlin
+private val mutex = Mutex()
+
+suspend fun pay(orderId: Long) = mutex.withLock {
+    // critical section; other coroutines suspend instead of blocking a thread
+}
+```
+
+## The in-memory counter
+
+```java
+class Counter {
+    private int count = 0;
+
+    public void increment() {
+        count++;      // conceptually: read, increment, write
+    }
+}
+```
+
+Two threads can both read 5 and both write 6, when the result should be 7. Making the method `synchronized` means a thread acquires the **monitor** of that instance on entry, and any other thread using the same monitor waits.
+
+You can also protect only a block, which keeps the critical section small:
+
+```java
+private final Object lock = new Object();
+
+public void increment() {
+    synchronized (lock) {
+        count++;
+    }
+}
+```
+
+`synchronized` also gives **memory visibility** guarantees between threads that use the same monitor.
+
+## Mutex and its alternatives
+
+A **mutex** (*mutual exclusion*) is the general concept; `synchronized` is one way to get it in Java.
+
+| Mechanism | Characteristics |
+| --- | --- |
+| `synchronized` | Acquires and releases the monitor automatically. |
+| `ReentrantLock` | Explicit control of acquisition, release and wait timeouts. |
+| Kotlin `Mutex` | Suspends the coroutine while waiting, without blocking the thread. |
+| `Semaphore` | Limits access to N simultaneous executions, not only one. |
+| `AtomicInteger` | Atomic operations on an integer without an explicit monitor. |
+
+## Why it fails across pods
+
+The lock lives in the memory of **one JVM**. If you deploy on Kubernetes with three replicas, each replica has its own JVM, memory and locks, so all three can enter their critical sections at the same time. There are three independent locks, and a request to pod 1 and another to pod 2 never see each other.
+
+| Scenario | Local lock protects? |
+| --- | --- |
+| Two threads, one pod | Yes |
+| Two requests on two pods | **No** |
+| Two services writing the same table | **No** |
+| A pod restarts mid-operation | No, the lock vanishes with the process |
+
+## Granularity and cost
+
+- `synchronized` on the whole service serializes **every** order, even unrelated ones, and caps throughput. A lock per key (per order id) limits the contention to requests that truly conflict.
+- Do not hold a local lock while calling slow external services: every other thread waits.
+- Prefer concurrent data structures (`ConcurrentHashMap`, `AtomicLong`) for simple in-memory counters.
+
+Shared state in a database or across pods needs a mechanism the **database** or a **shared coordinator** enforces: atomic updates, versioning, row locks, idempotency keys or distributed locks.
+
+## Pitfalls
+
+- **`synchronized` plus `@Transactional`**: Spring opens and commits the transaction in a proxy *around* the method, so the lock is released **before the commit**. A second thread can enter, read the old committed state and repeat the work, even on one pod.
+- **Virtual threads**: before JDK 24, a virtual thread that blocks inside `synchronized` *pins* its carrier thread, so a few of them can stall the scheduler. `ReentrantLock` did not have this problem; JDK 24 removed most pinning (JEP 491).
+- **Kotlin `Mutex` is not reentrant**: calling `withLock` again from inside the same lock deadlocks the coroutine. Also, a suspension point inside a `synchronized` block does not compile, on purpose.
+- **Waiting forever**: `ReentrantLock.tryLock(200, MILLISECONDS)` lets you give up instead of blocking indefinitely.
+- **Locks only help if every access uses the same lock**: one unprotected read or write breaks the guarantee.
+
+## Interview question
+
+*Can we guarantee that a payment is not duplicated by using `synchronized`?* Not if there are several instances of the service. You need a coordination mechanism **shared** by all of them.
